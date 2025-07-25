@@ -1,6 +1,7 @@
 /* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
+#include "BKE_node.hh"
 #include "DNA_node_types.h"
 #include "NOD_math_functions.hh"
 
@@ -8,7 +9,7 @@
 
 namespace blender::nodes {
 
-  NODE_STORAGE_FUNCS(NodeShaderMath)
+NODE_STORAGE_FUNCS(NodeShaderMath)
 
 static const mf::MultiFunction *get_base_multi_function(const bNode &node)
 {

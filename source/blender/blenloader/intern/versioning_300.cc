@@ -338,20 +338,19 @@ static void do_versions_idproperty_ui_data(Main *bmain)
   }
 
   /* Nodes and node sockets. */
-  if (bmain != nullptr) {
-    LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
-      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
-        version_idproperty_ui_data(node->prop);
-      }
-      LISTBASE_FOREACH (bNodeSocket *, socket, &ntree->inputs_legacy) {
-        version_idproperty_ui_data(socket->prop);
-      }
-      LISTBASE_FOREACH (bNodeSocket *, socket, &ntree->outputs_legacy) {
-        version_idproperty_ui_data(socket->prop);
-      }
+  for (bNodeTree &ntree : bmain->nodetrees) {
+    for (bNode &node : ntree.nodes) {
+      version_idproperty_ui_data(node.prop);
+    }
+    for (bNodeSocket &socket : ntree.inputs_legacy) {
+      version_idproperty_ui_data(socket.prop);
+    }
+    for (bNodeSocket &socket : ntree.outputs_legacy) {
+      version_idproperty_ui_data(socket.prop);
     }
   }
 
+  /* Objects. */
   for (Object &ob : bmain->objects) {
     /* The UI data from exposed node modifier properties is just copied from the corresponding node
      * group, but the copying only runs when necessary, so we still need to version data here. */
@@ -1100,16 +1099,17 @@ static void version_nla_action_strip_hold(Main *bmain)
 
 void do_versions_after_linking_300(FileData * /*fd*/, Main *bmain)
 {
-  /* Versioning: Migrate legacy Shader Math node options to new input sockets in Geometry node trees. */
+  /* Versioning: Migrate legacy Shader Math node options to new input sockets in Geometry node
+   * trees. */
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 300, 40)) {
-    LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
-      if (ntree->type == NTREE_GEOMETRY) {
-        LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
-          if (node->type_legacy == SH_NODE_MATH && node->storage == nullptr) {
-            NodeShaderMath *storage = (NodeShaderMath *)MEM_callocN(sizeof(NodeShaderMath), __func__);
-            storage->operation = node->custom1;
-            storage->use_clamp = node->custom2 != 0;
-            node->storage = storage;
+    for (bNodeTree &ntree : bmain->nodetrees) {
+      if (ntree.type == NTREE_GEOMETRY) {
+        for (bNode &node : ntree.nodes) {
+          if (node.type_legacy == SH_NODE_MATH && node.storage == nullptr) {
+            NodeShaderMath *storage = (NodeShaderMath *)MEM_new<NodeShaderMath>(__func__);
+            storage->operation = node.custom1;
+            storage->use_clamp = node.custom2 != 0;
+            node.storage = storage;
           }
         }
       }
@@ -4255,7 +4255,7 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
       if (pose->iksolver != IKSOLVER_ITASC || pose->ikparam == nullptr) {
         continue;
       }
-      bItasc *ikparam = static_cast<bItasc *>(pose->ikparam);
+      bItasc *ikparam = pose->ikparam;
       ikparam->flag |= ITASC_TRANSLATE_ROOT_BONES;
     }
   }

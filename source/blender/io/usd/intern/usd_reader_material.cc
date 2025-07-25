@@ -914,7 +914,10 @@ static IntermediateNode add_oneminus(bNodeTree *ntree, int column, NodePlacement
   /* An "invert" node : 1.0f - Value_001 */
   IntermediateNode oneminus{};
   oneminus.node = add_node(ntree, SH_NODE_MATH, loc);
-  oneminus.node->custom1 = NODE_MATH_SUBTRACT;
+  // Migrate legacy Math node operation assignment to storage struct.
+  if (NodeShaderMath *storage = static_cast<NodeShaderMath *>(oneminus.node->storage)) {
+    storage->operation = NODE_MATH_SUBTRACT;
+  }
   oneminus.sock_input_name = "Value_001";
   oneminus.sock_output_name = "Value";
 

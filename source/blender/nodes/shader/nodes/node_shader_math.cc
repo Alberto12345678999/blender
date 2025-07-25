@@ -23,9 +23,11 @@
 
 /* **************** SCALAR MATH ******************** */
 
-namespace blender::nodes::node_shader_math_cc {
+namespace blender {
 
-  NODE_STORAGE_FUNCS(NodeShaderMath)
+namespace nodes::node_shader_math_cc {
+
+NODE_STORAGE_FUNCS(NodeShaderMath)
 
 static void sh_node_math_declare(NodeDeclarationBuilder &b)
 {
@@ -168,7 +170,7 @@ static void sh_node_math_gather_link_searches(GatherLinkSearchOpParams &params)
 
 static void node_shader_math_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeShaderMath *data = MEM_callocN<NodeShaderMath>(__func__);
+  NodeShaderMath *data = MEM_new<NodeShaderMath>(__func__);
   data->operation = NODE_MATH_ADD;
   data->use_clamp = 0;
   node->storage = data;
@@ -281,7 +283,6 @@ static void node_eval_inverse(inverse_eval::InverseEvalParams &params)
     }
   }
 }
-
 
 NODE_SHADER_MATERIALX_BEGIN
 #ifdef WITH_MATERIALX
@@ -481,9 +482,9 @@ void register_node_type_sh_math()
   ntype.gpu_fn = file_ns::gpu_shader_math;
   ntype.updatefunc = node_math_update;
   ntype.initfunc = file_ns::node_shader_math_init;
-  blender::bke::node_type_storage(
+  bke::node_type_storage(
       ntype, "NodeShaderMath", node_free_standard_storage, node_copy_standard_storage);
-  ntype.build_multi_function = blender::nodes::node_math_build_multi_function;
+  ntype.build_multi_function = nodes::node_math_build_multi_function;
   ntype.gather_link_search_ops = file_ns::sh_node_math_gather_link_searches;
   ntype.materialx_fn = file_ns::node_shader_materialx;
   ntype.eval_elem = file_ns::node_eval_elem;

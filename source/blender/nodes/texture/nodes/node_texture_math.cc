@@ -6,9 +6,9 @@
  * \ingroup texnodes
  */
 
+#include "BKE_node.hh"
 #include "BLI_listbase.hh"
 #include "BLI_math_rotation_c.hh"
-#include "BKE_node.hh"
 
 #include "DNA_node_types.h"
 
@@ -35,7 +35,7 @@ NODE_STORAGE_FUNCS(NodeShaderMath)
 
 static void node_texture_math_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeShaderMath *data = MEM_callocN<NodeShaderMath>(__func__);
+  NodeShaderMath *data = MEM_new<NodeShaderMath>(__func__);
   data->operation = NODE_MATH_ADD;
   data->use_clamp = 0;
   node->storage = data;
@@ -385,7 +385,7 @@ void register_node_type_tex_math()
   ntype.exec_fn = exec;
   ntype.updatefunc = node_math_update;
   ntype.initfunc = node_texture_math_init;
-  blender::bke::node_type_storage(
+  bke::node_type_storage(
       ntype, "NodeShaderMath", node_free_standard_storage, node_copy_standard_storage);
 
   bke::node_register_type(ntype);

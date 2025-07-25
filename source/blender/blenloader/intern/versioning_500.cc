@@ -1303,19 +1303,20 @@ static void do_version_convert_to_generic_nodes(bNodeTree *node_tree)
         break;
       }
       case CMP_NODE_MAP_VALUE_DEPRECATED: {
-        do_version_map_value_node(node_tree, node);
+        do_version_map_value_node(node_tree, &node);
         break;
       }
-      /* --- Legacy Math Node migration for Shader, Compositor, and Geometry Nodes: SH_NODE_MATH --- */
+      /* --- Legacy Math Node migration for Shader, Compositor, and Geometry Nodes: SH_NODE_MATH
+       * --- */
       case SH_NODE_MATH_LEGACY: {
-        node->type_legacy = SH_NODE_MATH;
-        STRNCPY(node->idname, "ShaderNodeMath");
+        node.type_legacy = SH_NODE_MATH;
+        STRNCPY(node.idname, "ShaderNodeMath");
 
         /* Transfer options from node to NodeShaderMath storage. */
-        NodeShaderMath *data = MEM_callocN<NodeShaderMath>(__func__);
-        data->operation = node->custom1;
-        data->use_clamp = node->custom2 & SHD_MATH_CLAMP ? 1 : 0;
-        node->storage = data;
+        NodeShaderMath *data = MEM_new<NodeShaderMath>(__func__);
+        data->operation = node.custom1;
+        data->use_clamp = node.custom2 & SHD_MATH_CLAMP ? 1 : 0;
+        node.storage = data;
         break;
       }
       default:
@@ -2834,7 +2835,7 @@ void do_versions_after_linking_500(FileData *fd, Main *bmain)
       }
       BKE_pose_rebuild(nullptr, &object, id_cast<bArmature *>(object.data), false);
       for (bPoseChannel &pose_bone : object.pose->chanbase) {
-        if (pose_bone.bone_get(object)->flag & BONE_HIDDEN_P) {
+        if (pose_bone.bone->flag & BONE_HIDDEN_P) {
           pose_bone.drawflag |= PCHAN_DRAW_HIDDEN;
         }
         else {
@@ -2871,19 +2872,6 @@ void do_versions_after_linking_500(FileData *fd, Main *bmain)
     }
   }
 
-  /* Menus were converted into inputs, so the input indices were changed, see the same subversion
-   * in blo_do_versions_500. */
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 66)) {
-    version_node_socket_index_animdata(bmain, NTREE_COMPOSIT, CMP_NODE_GLARE, 1, 2, 22);
-    version_node_socket_index_animdata(bmain, NTREE_COMPOSIT, CMP_NODE_MASK, 0, 1, 7);
-    version_node_socket_index_animdata(bmain, NTREE_COMPOSIT, CMP_NODE_SCALE, 1, 1, 8);
-    version_node_socket_index_animdata(bmain, NTREE_COMPOSIT, CMP_NODE_KEYING, 13, 1, 16);
-    version_node_socket_index_animdata(bmain, NTREE_COMPOSIT, CMP_NODE_KUWAHARA, 2, 1, 7);
-    version_node_socket_index_animdata(bmain, NTREE_COMPOSIT, CMP_NODE_LENSDIST, 1, 1, 6);
-    version_node_socket_index_animdata(bmain, NTREE_COMPOSIT, CMP_NODE_BLUR, 2, 1, 5);
-    version_node_socket_index_animdata(bmain, NTREE_COMPOSIT, CMP_NODE_TONEMAP, 1, 1, 9);
-  }
-
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 97)) {
     for (Scene &scene : bmain->scenes) {
       if (scene.ed != nullptr) {
@@ -2903,8 +2891,8 @@ void do_versions_after_linking_500(FileData *fd, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 110)) {
-    /* Build map of armature->object to quickly find out afterwards which armature is used by which
-     * objects. */
+    /* Build map of armature->object to quickly find out afterwards which armature is used by
+     * which objects. */
     Map<bArmature *, Vector<Object *>> armature_usage_map;
     for (Object &ob : bmain->objects) {
       if (ob.type != OB_ARMATURE || !ob.data) {
@@ -2924,10 +2912,10 @@ void do_versions_after_linking_500(FileData *fd, Main *bmain)
 
       Vector<Object *> *users = armature_usage_map.lookup_ptr(&armature);
       if (!users) {
-        /* If `users` is a nullptr that means there is no user of that armature. That means the
-         * property won't be fixed for armatures that are not used by an object during versioning.
-         * However since the driver has to be moved to an object there is no way to fix it in this
-         * case. */
+        /* If `users` is a nullptr, that means there is no user of that armature.
+         * The property won't be fixed for armatures that are not used by an object during
+         * versioning. However since the driver has to be moved to an object there is no way to
+         * fix it in this case. */
         continue;
       }
 
@@ -3662,11 +3650,11 @@ void blo_do_versions_500(FileData *fd, Library * /*lib*/, Main *bmain)
     }
   }
 
-  /* ImageFormatData gained a new media type which we need to be set according to the existing
-   * imtype. */
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 41)) {
-    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
-      update_format_media_type(&scene->r.im_format);
+  /* ImageFormatData gained a new media type which we need to be set according to the
+   * existing imtype. */
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 42)) {
+    for (Scene &scene : bmain->scenes) {
+      update_format_media_type(&scene.r.im_format);
     }
 
     FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
@@ -3695,32 +3683,118 @@ void blo_do_versions_500(FileData *fd, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_END;
   }
 
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 43)) {
+    for (World &world : bmain->worlds) {
+      do_version_world_remove_use_nodes(bmain, &world);
+    }
+  }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 42)) {
-    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
-      /* Make sure typeinfo is valid if you really must touch socket declarations here. */
-      blender::bke::node_tree_set_type(*ntree);
-      if (!ELEM(ntree->type, NTREE_SHADER, NTREE_COMPOSIT, NTREE_GEOMETRY)) {
-        continue;
-      }
-      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
-        if (node->type_legacy == SH_NODE_MATH && node->storage == nullptr) {
-          NodeShaderMath *storage = MEM_callocN<NodeShaderMath>(__func__);
-          storage->operation = node->custom1;
-          storage->use_clamp = (node->custom2 & SHD_MATH_CLAMP) ? 1 : 0;
-          node->storage = storage;
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 45)) {
+    FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
+      if (node_tree->type == NTREE_GEOMETRY) {
+        for (bNode &node : node_tree->nodes) {
+          if (node.type_legacy == GEO_NODE_FILL_CURVE) {
+            do_version_fill_curve_options_to_inputs(*node_tree, node);
+          }
+          else if (node.type_legacy == GEO_NODE_FILLET_CURVE) {
+            do_version_fillet_curve_options_to_inputs(*node_tree, node);
+          }
+          else if (node.type_legacy == GEO_NODE_RESAMPLE_CURVE) {
+            do_version_resample_curve_options_to_inputs(*node_tree, node);
+          }
+          else if (node.type_legacy == GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME) {
+            do_version_distribute_points_in_volume_options_to_inputs(*node_tree, node);
+          }
+          else if (node.type_legacy == GEO_NODE_MERGE_BY_DISTANCE) {
+            do_version_merge_by_distance_options_to_inputs(*node_tree, node);
+          }
+          else if (node.type_legacy == GEO_NODE_MESH_TO_VOLUME) {
+            do_version_mesh_to_volume_options_to_inputs(*node_tree, node);
+          }
+          else if (node.type_legacy == GEO_NODE_RAYCAST) {
+            do_version_raycast_options_to_inputs(*node_tree, node);
+          }
+          else if (node.type_legacy == GEO_NODE_REMOVE_ATTRIBUTE) {
+            do_version_remove_attribute_options_to_inputs(*node_tree, node);
+          }
+          else if (node.type_legacy == GEO_NODE_SAMPLE_GRID) {
+            do_version_sample_grid_options_to_inputs(*node_tree, node);
+          }
+          else if (node.type_legacy == GEO_NODE_SCALE_ELEMENTS) {
+            do_version_scale_elements_options_to_inputs(*node_tree, node);
+          }
+          else if (node.type_legacy == GEO_NODE_SET_CURVE_NORMAL) {
+            do_version_set_curve_normal_options_to_inputs(*node_tree, node);
+          }
+          else if (node.type_legacy == GEO_NODE_SUBDIVISION_SURFACE) {
+            do_version_subdivision_surface_options_to_inputs(*node_tree, node);
+          }
+          else if (node.type_legacy == GEO_NODE_UV_PACK_ISLANDS) {
+            do_version_uv_pack_islands_options_to_inputs(*node_tree, node);
+          }
+          else if (node.type_legacy == GEO_NODE_UV_UNWRAP) {
+            do_version_uv_unwrap_options_to_inputs(*node_tree, node);
+          }
         }
       }
     }
     FOREACH_NODETREE_END;
   }
 
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 46)) {
+    /* Versioning from 0a0dd4ca37 was wrong, it only created asset shelf regions for Node Editors
+     * that are Compositors. If you change a non-Node Editor (e.g. an Image Editor) to a Compositor
+     * Editor, all is fine (SpaceLink *node_create gets called, the regions set up correctly), but
+     * changing an existing Node Editor (e.g. Shader or Geometry Nodes) to a Compositor, no new
+     * Space gets set up (rightfully so) and we are then missing the regions. Now corrected below
+     * (version bump in 5.1 since that is also affected). */
+  }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 42)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 48)) {
     FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
-      /* Make sure typeinfo is valid if you really must touch socket declarations here. */
-      blender::bke::node_tree_set_type(*ntree);
-      if (!ELEM(ntree->type, NTREE_SHADER, NTREE_COMPOSIT, NTREE_GEOMETRY)) {
+      if (ntree->type != NTREE_COMPOSIT) {
+        continue;
+      }
+      for (bNode &node : ntree->nodes) {
+        if (node.type_legacy != CMP_NODE_ROTATE) {
+          continue;
+        }
+        if (node.storage != nullptr) {
+          continue;
+        }
+        NodeRotateData *data = MEM_new<NodeRotateData>(__func__);
+        data->interpolation = node.custom1;
+        data->extension_x = CMP_NODE_EXTENSION_MODE_CLIP;
+        data->extension_y = CMP_NODE_EXTENSION_MODE_CLIP;
+        node.storage = data;
+      }
+      FOREACH_NODETREE_END;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 49)) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type != NTREE_COMPOSIT) {
+        continue;
+      }
+      for (bNode &node : ntree->nodes) {
+        if (node.type_legacy != CMP_NODE_DISPLACE) {
+          continue;
+        }
+        if (node.storage == nullptr) {
+          continue;
+        }
+        NodeDisplaceData *data = static_cast<NodeDisplaceData *>(node.storage);
+        data->extension_x = CMP_NODE_EXTENSION_MODE_CLIP;
+        data->extension_y = CMP_NODE_EXTENSION_MODE_CLIP;
+      }
+      FOREACH_NODETREE_END;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 50)) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type != NTREE_COMPOSIT) {
         continue;
       }
       for (bNode &node : ntree->nodes) {
@@ -3738,6 +3812,685 @@ void blo_do_versions_500(FileData *fd, Library * /*lib*/, Main *bmain)
       }
       FOREACH_NODETREE_END;
     }
+  }
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 51)) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type != NTREE_COMPOSIT) {
+        continue;
+      }
+      for (bNode &node : ntree->nodes) {
+        if (node.type_legacy != CMP_NODE_CORNERPIN) {
+          continue;
+        }
+        if (node.storage != nullptr) {
+          continue;
+        }
+        NodeCornerPinData *data = MEM_new<NodeCornerPinData>(__func__);
+        data->interpolation = node.custom1;
+        data->extension_x = CMP_NODE_EXTENSION_MODE_CLIP;
+        data->extension_y = CMP_NODE_EXTENSION_MODE_CLIP;
+        node.storage = data;
+      }
+      FOREACH_NODETREE_END;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 54)) {
+    FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
+      if (node_tree->type != NTREE_COMPOSIT) {
+        continue;
+      }
+      for (bNode &node : node_tree->nodes) {
+        if (node.type_legacy == CMP_NODE_OUTPUT_FILE) {
+          do_version_file_output_node(node);
+        }
+      }
+      FOREACH_NODETREE_END;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 58)) {
+    for (Object &object : bmain->objects) {
+      for (ModifierData &modifier : object.modifiers) {
+        if (modifier.type != eModifierType_GreasePencilLineart) {
+          continue;
+        }
+        GreasePencilLineartModifierData *lmd = reinterpret_cast<GreasePencilLineartModifierData *>(
+            &modifier);
+        if (lmd->radius != 0.0f) {
+          continue;
+        }
+        lmd->radius = float(lmd->thickness_legacy) *
+                      bke::greasepencil::LEGACY_RADIUS_CONVERSION_FACTOR;
+      }
+    }
+  }
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 61)) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type != NTREE_COMPOSIT) {
+        continue;
+      }
+      version_node_input_socket_name(ntree, CMP_NODE_GAMMA_DEPRECATED, "Image", "Color");
+      version_node_output_socket_name(ntree, CMP_NODE_GAMMA_DEPRECATED, "Image", "Color");
+
+      for (bNode &node : ntree->nodes) {
+        if (node.type_legacy == CMP_NODE_GAMMA_DEPRECATED) {
+          node.type_legacy = SH_NODE_GAMMA;
+          STRNCPY_UTF8(node.idname, "ShaderNodeGamma");
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 63)) {
+    for (Scene &scene : bmain->scenes) {
+      if (scene.r.bake_flag & R_BAKE_MULTIRES) {
+        scene.r.bake.type = eBakeType(scene.r.bake_mode);
+        scene.r.bake.flag |= (scene.r.bake_flag & (R_BAKE_MULTIRES | R_BAKE_LORES_MESH));
+        scene.r.bake.margin_type = eBakeMarginType(scene.r.bake_margin_type);
+        scene.r.bake.margin = scene.r.bake_margin;
+      }
+      else {
+        scene.r.bake.type = R_BAKE_NORMALS;
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 62)) {
+    for (Scene &scene : bmain->scenes) {
+      scene.r.bake.displacement_space = R_BAKE_SPACE_OBJECT;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 64)) {
+    FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
+      remove_in_and_out_node_interface(*node_tree);
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 65)) {
+    for (Brush &brush : bmain->brushes) {
+      srgb_to_linearrgb_v3_v3(brush.color, brush.rgb);
+      srgb_to_linearrgb_v3_v3(brush.secondary_color, brush.secondary_rgb);
+    }
+    for (Scene &scene : bmain->scenes) {
+      UnifiedPaintSettings &ups = scene.toolsettings->unified_paint_settings;
+      srgb_to_linearrgb_v3_v3(ups.color, ups.rgb);
+      srgb_to_linearrgb_v3_v3(ups.secondary_color, ups.secondary_rgb);
+
+      for_each_mode_paint_settings(scene, [](Scene & /*scene*/, Paint *paint) {
+        if (paint != nullptr) {
+          UnifiedPaintSettings &ups = paint->unified_paint_settings;
+          srgb_to_linearrgb_v3_v3(ups.color, ups.rgb);
+          srgb_to_linearrgb_v3_v3(ups.secondary_color, ups.secondary_rgb);
+        }
+      });
+    }
+    for (Palette &palette : bmain->palettes) {
+      for (PaletteColor &color : palette.colors) {
+        srgb_to_linearrgb_v3_v3(color.color, color.rgb);
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 66)) {
+    FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
+      if (node_tree->type != NTREE_COMPOSIT) {
+        continue;
+      }
+      for (bNode &node : node_tree->nodes) {
+        if (node.type_legacy == CMP_NODE_BLUR) {
+          do_version_blur_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_FILTER) {
+          do_version_filter_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_VIEW_LEVELS) {
+          do_version_levels_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_DILATEERODE) {
+          do_version_dilate_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_TONEMAP) {
+          do_version_tone_map_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_LENSDIST) {
+          do_version_lens_distortion_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_KUWAHARA) {
+          do_version_kuwahara_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_DENOISE) {
+          do_version_denoise_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_TRANSLATE) {
+          do_version_translate_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_TRANSFORM) {
+          do_version_transform_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_CORNERPIN) {
+          do_version_corner_pin_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_MAP_UV) {
+          do_version_map_uv_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_SCALE) {
+          do_version_scale_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_ROTATE) {
+          do_version_rotate_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_DISPLACE) {
+          do_version_displace_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_STABILIZE2D) {
+          do_version_stabilize_2d_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_MASK_BOX) {
+          do_version_box_mask_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_MASK_ELLIPSE) {
+          do_version_ellipse_mask_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_TRACKPOS) {
+          do_version_track_position_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_KEYING) {
+          do_version_keying_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_MASK) {
+          do_version_mask_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_MOVIEDISTORTION) {
+          do_version_movie_distortion_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_GLARE) {
+          do_version_glare_menus_to_inputs(*node_tree, node);
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 67)) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      initialize_missing_closure_and_bundle_node_storage(*ntree);
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 68)) {
+    for (Scene &scene : bmain->scenes) {
+      sequencer_remove_listbase_pointers(scene);
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 71)) {
+    for (Scene &scene : bmain->scenes) {
+      scene.toolsettings->uvsculpt.size *= 2;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 72)) {
+    for (Brush &brush : bmain->brushes) {
+      if (brush.curve_size == nullptr) {
+        brush.curve_size = BKE_paint_default_curve();
+      }
+      if (brush.curve_strength == nullptr) {
+        brush.curve_strength = BKE_paint_default_curve();
+      }
+      if (brush.curve_jitter == nullptr) {
+        brush.curve_jitter = BKE_paint_default_curve();
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 73)) {
+    /* Old files created on WIN32 use `\r`. */
+    for (Curve &cu : bmain->curves) {
+      if (cu.str) {
+        BLI_string_replace_char(cu.str, '\r', '\n');
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 74)) {
+    for (Scene &scene : bmain->scenes) {
+      if (scene.ed != nullptr) {
+        /* Set the first strip modifier as the active one and uncollapse the root panel. */
+        seq::foreach_strip(&scene.ed->seqbase, [&](Strip *strip) -> bool {
+          seq::modifier_set_active(strip,
+                                   static_cast<StripModifierData *>(strip->modifiers.first));
+          for (StripModifierData &smd : strip->modifiers) {
+            smd.layout_panel_open_flag |= UI_PANEL_DATA_EXPAND_ROOT;
+          }
+          return true;
+        });
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 75)) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type == NTREE_COMPOSIT) {
+        version_node_socket_name(ntree, CMP_NODE_RGB, "RGBA", "Color");
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 81)) {
+    for (Material &material : bmain->materials) {
+      do_version_material_remove_use_nodes(bmain, &material);
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 82)) {
+    FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
+      if (node_tree->type != NTREE_COMPOSIT) {
+        continue;
+      }
+      for (bNode &node : node_tree->nodes) {
+        if (node.type_legacy == CMP_NODE_SETALPHA) {
+          do_version_set_alpha_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_CHANNEL_MATTE) {
+          do_version_channel_matte_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_COLORBALANCE) {
+          do_version_color_balance_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_PREMULKEY) {
+          do_version_convert_alpha_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_DIST_MATTE) {
+          do_version_distance_matte_menus_to_inputs(*node_tree, node);
+        }
+        else if (node.type_legacy == CMP_NODE_COLOR_SPILL) {
+          do_version_color_spill_menus_to_inputs(*node_tree, node);
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 83)) {
+    FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
+      if (node_tree->type != NTREE_COMPOSIT) {
+        continue;
+      }
+      for (bNode &node : node_tree->nodes) {
+        if (node.type_legacy == CMP_NODE_DOUBLEEDGEMASK) {
+          do_version_double_edge_mask_options_to_inputs(*node_tree, node);
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 84)) {
+    /* Add sidebar to the preferences editor. */
+    for (bScreen &screen : bmain->screens) {
+      for (ScrArea &area : screen.areabase) {
+        for (SpaceLink &sl : area.spacedata) {
+          if (sl.spacetype == SPACE_USERPREF) {
+            ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
+                                                                             &sl.regionbase;
+            ARegion *new_sidebar = do_versions_add_region_if_not_found(
+                regionbase, RGN_TYPE_UI, "sidebar for preferences", RGN_TYPE_HEADER);
+            if (new_sidebar != nullptr) {
+              new_sidebar->alignment = RGN_ALIGN_LEFT;
+              new_sidebar->flag &= ~RGN_FLAG_HIDDEN;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (MAIN_VERSION_FILE_ATLEAST(bmain, 500, 23) && !MAIN_VERSION_FILE_ATLEAST(bmain, 500, 85)) {
+    /* Old sky textures were temporarily removed and restored. */
+    /* Change default Sky Texture to Nishita (after removal of old sky models) */
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type == NTREE_SHADER) {
+        for (bNode &node : ntree->nodes) {
+          if (node.type_legacy == SH_NODE_TEX_SKY && node.storage) {
+            NodeTexSky *tex = static_cast<NodeTexSky *>(node.storage);
+            if (tex->sky_model == 0) {
+              tex->sky_model = SHD_SKY_SINGLE_SCATTERING;
+            }
+            if (tex->sky_model == 1) {
+              tex->sky_model = SHD_SKY_MULTIPLE_SCATTERING;
+            }
+          }
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 86)) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type != NTREE_GEOMETRY) {
+        continue;
+      }
+      version_dynamic_viewer_node_items(*ntree);
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 87)) {
+    FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
+      if (node_tree->type != NTREE_COMPOSIT) {
+        continue;
+      }
+      version_node_input_socket_name(node_tree, CMP_NODE_ALPHAOVER, "Image_001", "Foreground");
+      version_node_input_socket_name(node_tree, CMP_NODE_ALPHAOVER, "Image", "Background");
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 88)) {
+    FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
+      if (node_tree->type != NTREE_COMPOSIT) {
+        continue;
+      }
+      version_node_input_socket_name(node_tree, CMP_NODE_DISPLACE, "Vector", "Displacement");
+      for (bNode &node : node_tree->nodes) {
+        if (node.type_legacy == CMP_NODE_DISPLACE) {
+          do_version_displace_node_remove_xy_scale(*node_tree, node);
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 89)) {
+    FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
+      if (node_tree->type != NTREE_COMPOSIT) {
+        continue;
+      }
+      version_node_input_socket_name(node_tree, CMP_NODE_BOKEHBLUR, "Bounding box", "Mask");
+      for (bNode &node : node_tree->nodes) {
+        if (node.type_legacy == CMP_NODE_BOKEHBLUR) {
+          do_version_bokeh_blur_pixel_size(*node_tree, node);
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 89)) {
+    /* Node Editor: toggle overlays on. */
+    if (!DNA_struct_exists(fd->filesdna, "SpaceClipOverlay")) {
+      for (bScreen &screen : bmain->screens) {
+        for (ScrArea &area : screen.areabase) {
+          for (SpaceLink &space : area.spacedata) {
+            if (space.spacetype == SPACE_CLIP) {
+              SpaceClip *sclip = reinterpret_cast<SpaceClip *>(&space);
+              sclip->overlay.flag |= SC_SHOW_OVERLAYS;
+              sclip->overlay.flag |= SC_SHOW_CURSOR;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 92)) {
+    do_version_adaptive_subdivision(bmain);
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 95)) {
+    for (Camera &camera : bmain->cameras) {
+      float default_col[4] = {0.5f, 0.5f, 0.5f, 1.0f};
+      copy_v4_v4(camera.composition_guide_color, default_col);
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 97)) {
+    /* Enable new "Optional Label" setting for all menu sockets. This was implicit before. */
+    FOREACH_NODETREE_BEGIN (bmain, tree, id) {
+      tree->tree_interface.foreach_item([&](bNodeTreeInterfaceItem &item) {
+        if (item.item_type != NODE_INTERFACE_SOCKET) {
+          return true;
+        }
+        auto &socket = reinterpret_cast<bNodeTreeInterfaceSocket &>(item);
+        if (!STREQ(socket.socket_type, "NodeSocketMenu")) {
+          return true;
+        }
+        socket.flag |= NODE_INTERFACE_SOCKET_OPTIONAL_LABEL;
+        return true;
+      });
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 98)) {
+    /* For a brief period of time, these values were not properly versioned, so it is possible for
+     * files to be in an odd state. This versioning was formerly run in 4.2 subversion 23. */
+    for (Scene &scene : bmain->scenes) {
+      UvSculpt &uvsculpt = scene.toolsettings->uvsculpt;
+      if (uvsculpt.size == 0 || uvsculpt.curve_distance_falloff == nullptr) {
+        uvsculpt.size = 100;
+        uvsculpt.strength = 1.0f;
+        uvsculpt.curve_distance_falloff_preset = BRUSH_CURVE_SMOOTH;
+        if (uvsculpt.curve_distance_falloff == nullptr) {
+          uvsculpt.curve_distance_falloff = BKE_curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 99)) {
+    for (wmWindowManager &wm : bmain->wm) {
+      wm.xr.session_settings.fly_speed = 3.0f;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 102)) {
+    for (Scene &scene : bmain->scenes) {
+      scene.r.time_jump_delta = 1.0f;
+      scene.r.time_jump_unit = 1;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 405, 103)) {
+    FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
+      if (node_tree->type == NTREE_COMPOSIT) {
+        for (bNode &node : node_tree->nodes) {
+          if (node.type_legacy == CMP_NODE_COLORBALANCE) {
+            do_version_lift_gamma_gain_srgb_to_linear(*node_tree, node);
+          }
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 104)) {
+    /* Dope Sheet Editor: toggle overlays on. */
+    if (!DNA_struct_exists(fd->filesdna, "SpaceActionOverlays")) {
+      for (bScreen &screen : bmain->screens) {
+        for (ScrArea &area : screen.areabase) {
+          for (SpaceLink &space : area.spacedata) {
+            if (space.spacetype == SPACE_ACTION) {
+              SpaceAction *space_action = reinterpret_cast<SpaceAction *>(&space);
+              space_action->overlays.flag |= ADS_OVERLAY_SHOW_OVERLAYS;
+              space_action->overlays.flag |= ADS_SHOW_SCENE_STRIP_FRAME_RANGE;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 105)) {
+    for (Mesh &mesh : bmain->meshes) {
+      bke::mesh_uv_select_to_single_attribute(mesh);
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 106)) {
+    FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
+      if (node_tree->type != NTREE_COMPOSIT) {
+        continue;
+      }
+      version_node_input_socket_name(
+          node_tree, CMP_NODE_COLORCORRECTION, "Master Lift", "Master Offset");
+      version_node_input_socket_name(
+          node_tree, CMP_NODE_COLORCORRECTION, "Highlights Lift", "Highlights Offset");
+      version_node_input_socket_name(
+          node_tree, CMP_NODE_COLORCORRECTION, "Midtones Lift", "Midtones Offset");
+      version_node_input_socket_name(
+          node_tree, CMP_NODE_COLORCORRECTION, "Shadows Lift", "Shadows Offset");
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 107)) {
+    for (Material &material : bmain->materials) {
+      /* The flag was actually interpreted as reversed. */
+      material.blend_flag ^= MA_BL_LIGHTPROBE_VOLUME_DOUBLE_SIDED;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 108)) {
+    for (bScreen &screen : bmain->screens) {
+      for (ScrArea &area : screen.areabase) {
+        for (SpaceLink &sl : area.spacedata) {
+          if (sl.spacetype == SPACE_IMAGE) {
+            SpaceImage *sima = reinterpret_cast<SpaceImage *>(&sl);
+            sima->iuser.flag &= ~IMA_SHOW_SEQUENCER_SCENE;
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 109)) {
+    for (bNodeTree &ntree : bmain->nodetrees) {
+      repair_node_link_node_pointers(*fd, ntree);
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 112)) {
+    /* The ownership of these pointers was moved to #CustomData in #customdata_version_242 and they
+     * became deprecated in 05952aa94d33ee when we started using implicit-sharing.
+     * However, they were never cleared and became dangling pointers. */
+    for (Mesh &mesh : bmain->meshes) {
+      mesh.mpoly = nullptr;
+      mesh.mloop = nullptr;
+      mesh.mvert = nullptr;
+      mesh.medge = nullptr;
+      mesh.dvert = nullptr;
+      mesh.mtface = nullptr;
+      mesh.tface = nullptr;
+      mesh.mcol = nullptr;
+      mesh.mface = nullptr;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 501, 2)) {
+    for (bScreen &screen : bmain->screens) {
+      for (ScrArea &area : screen.areabase) {
+        for (SpaceLink &sl : area.spacedata) {
+          if (sl.spacetype != SPACE_NODE) {
+            continue;
+          }
+
+          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
+                                                                           &sl.regionbase;
+
+          if (ARegion *new_shelf_region = do_versions_add_region_if_not_found(
+                  regionbase,
+                  RGN_TYPE_ASSET_SHELF,
+                  "Asset shelf for compositing (versioning)",
+                  RGN_TYPE_HEADER))
+          {
+            new_shelf_region->alignment = RGN_ALIGN_BOTTOM;
+          }
+          if (ARegion *new_shelf_header = do_versions_add_region_if_not_found(
+                  regionbase,
+                  RGN_TYPE_ASSET_SHELF_HEADER,
+                  "Asset shelf header for compositing (versioning)",
+                  RGN_TYPE_ASSET_SHELF))
+          {
+            new_shelf_header->alignment = RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV;
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 501, 4)) {
+    /* Clear mute flag on node types that set ntype->no_muting = true. */
+    static const Set<std::string> no_muting_nodes = {"CompositorNodeViewer",
+                                                     "NodeClosureInput",
+                                                     "NodeClosureOutput",
+                                                     "GeometryNodeForeachGeometryElementInput",
+                                                     "GeometryNodeForeachGeometryElementOutput",
+                                                     "GeometryNodeRepeatInput",
+                                                     "GeometryNodeRepeatOutput",
+                                                     "GeometryNodeSimulationInput",
+                                                     "GeometryNodeSimulationOutput",
+                                                     "GeometryNodeViewer",
+                                                     "NodeGroupInput",
+                                                     "NodeGroupOutput",
+                                                     "ShaderNodeOutputAOV",
+                                                     "ShaderNodeOutputLight",
+                                                     "ShaderNodeOutputLineStyle",
+                                                     "ShaderNodeOutputMaterial",
+                                                     "ShaderNodeOutputWorld",
+                                                     "TextureNodeOutput",
+                                                     "TextureNodeViewer"};
+    for (bNodeTree &ntree : bmain->nodetrees) {
+      for (bNode &node : ntree.nodes) {
+        if (no_muting_nodes.contains(node.idname)) {
+          node.flag &= ~NODE_MUTED;
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 114)) {
+    for (Scene &scene : bmain->scenes) {
+      if (!scene.ed) {
+        continue;
+      }
+      seq::foreach_strip(&scene.ed->seqbase, [&](Strip *strip) {
+        for (StripModifierData &md : strip->modifiers) {
+          md.ui_expand_flag = md.layout_panel_open_flag & UI_PANEL_DATA_EXPAND_ROOT;
+        }
+        return true;
+      });
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 115)) {
+    FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
+      if (ELEM(GS(id->name), ID_MA, ID_LA, ID_WO, ID_TE, ID_SCE, ID_LS)) {
+        /* These node trees should not have interface sockets. However, in some files they were
+         * added through the Python API. Remove these interface sockets here before they cause
+         * problems further down the line. */
+        version_node_tree_clear_interface(*node_tree);
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 117)) {
+    FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
+      if (node_tree->type == NTREE_GEOMETRY) {
+        /* Gradient Texture node did not clamp results for the Compositor CPU and geometry nodes.
+         * The compositor is not versioned to unify it with GPU backend. */
+        do_version_texture_gradient_clamp(node_tree);
+      }
+    }
+    FOREACH_NODETREE_END;
   }
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 51)) {
     FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
@@ -4435,6 +5188,33 @@ void blo_do_versions_500(FileData *fd, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_END;
   }
 
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 502, 6)) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      bke::node_tree_set_type(*ntree);
+      for (bNode &node : ntree->nodes) {
+        if (node.type_legacy == NODE_GROUP) {
+          continue; /* Unsafe while group->id might be null. */
+        }
+        if (ELEM(node.type_legacy,
+                 SH_NODE_MATH,
+                 SH_NODE_COMBINE_COLOR,
+                 SH_NODE_SEPARATE_COLOR,
+                 SH_NODE_MIX))
+        {
+          bke::node_declaration_ensure(*ntree, node);
+        }
+      }
+      for (bNode &node : ntree->nodes) {
+        if (node.type_legacy == SH_NODE_MATH && node.storage == nullptr) {
+          NodeShaderMath *storage = MEM_new<NodeShaderMath>(__func__);
+          storage->operation = node.custom1;
+          storage->use_clamp = (node.custom2 & SHD_MATH_CLAMP) ? 1 : 0;
+          node.storage = storage;
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.

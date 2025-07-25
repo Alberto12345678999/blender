@@ -1991,7 +1991,7 @@ static void node_blend_read_data_storage(BlendDataReader *reader, bNodeTree *ntr
 
   /* --- Legacy Math Node migration: SH_NODE_MATH --- */
   if (node->type_legacy == SH_NODE_MATH && node->storage == nullptr) {
-    NodeShaderMath *storage = (NodeShaderMath *)MEM_callocN(sizeof(NodeShaderMath), __func__);
+    NodeShaderMath *storage = (NodeShaderMath *)MEM_new<NodeShaderMath>(__func__);
     /* Only copy legacy fields if storage is missing. */
     storage->operation = node->custom1;
     storage->use_clamp = node->custom2 != SHD_MATH_CLAMP ? 0 : 1;

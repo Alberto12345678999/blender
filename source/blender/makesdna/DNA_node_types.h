@@ -721,15 +721,17 @@ enum eNodeShader_MathClamp : char {
   SHD_MATH_CLAMP = 1,
 };
 
-typedef struct NodeShaderMath {
+struct NodeShaderMath {
+  DNA_DEFINE_CXX_METHODS(NodeShaderMath)
+
   /** #NodeMathOperation */
   int8_t operation;
   /** #NodeMathClamp */
   int8_t use_clamp;
-  char _pad[2];
-} NodeShaderMath;
+  char _pad[2] = {};
+};
 
-typedef enum NodeMathOperation {
+enum NodeMathOperation {
   NODE_MATH_ADD = 0,
   NODE_MATH_SUBTRACT = 1,
   NODE_MATH_MULTIPLY = 2,

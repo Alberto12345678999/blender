@@ -1093,7 +1093,7 @@ static void square_roughness_node_insert(bNodeTree *ntree)
                                    bNode *tonode,
                                    bNodeSocket *tosock) {
     /* Add `sqrt` node. */
-    bNode *node = blender::bke::node_add_static_node(nullptr, *ntree, SH_NODE_MATH);
+    bNode *node = bke::node_add_static_node(nullptr, *ntree, SH_NODE_MATH);
     // Migrate legacy Math node operation assignment to storage struct.
     if (NodeShaderMath *storage = static_cast<NodeShaderMath *>(node->storage)) {
       storage->operation = NODE_MATH_POWER;
