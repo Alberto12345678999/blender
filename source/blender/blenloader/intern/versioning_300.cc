@@ -338,15 +338,17 @@ static void do_versions_idproperty_ui_data(Main *bmain)
   }
 
   /* Nodes and node sockets. */
-  for (bNodeTree &ntree : bmain->nodetrees) {
-    for (bNode &node : ntree.nodes) {
-      version_idproperty_ui_data(node.prop);
-    }
-    for (bNodeSocket &socket : ntree.inputs_legacy) {
-      version_idproperty_ui_data(socket.prop);
-    }
-    for (bNodeSocket &socket : ntree.outputs_legacy) {
-      version_idproperty_ui_data(socket.prop);
+  if (bmain != nullptr) {
+    LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
+      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+        version_idproperty_ui_data(node->prop);
+      }
+      LISTBASE_FOREACH (bNodeSocket *, socket, &ntree->inputs_legacy) {
+        version_idproperty_ui_data(socket->prop);
+      }
+      LISTBASE_FOREACH (bNodeSocket *, socket, &ntree->outputs_legacy) {
+        version_idproperty_ui_data(socket->prop);
+      }
     }
   }
 
@@ -1098,6 +1100,21 @@ static void version_nla_action_strip_hold(Main *bmain)
 
 void do_versions_after_linking_300(FileData * /*fd*/, Main *bmain)
 {
+  /* Versioning: Migrate legacy Shader Math node options to new input sockets in Geometry node trees. */
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 300, 40)) {
+    LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
+      if (ntree->type == NTREE_GEOMETRY) {
+        LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+          if (node->type_legacy == SH_NODE_MATH && node->storage == nullptr) {
+            NodeShaderMath *storage = (NodeShaderMath *)MEM_callocN(sizeof(NodeShaderMath), __func__);
+            storage->operation = node->custom1;
+            storage->use_clamp = node->custom2 != 0;
+            node->storage = storage;
+          }
+        }
+      }
+    }
+  }
   if (MAIN_VERSION_FILE_ATLEAST(bmain, 300, 0) && !MAIN_VERSION_FILE_ATLEAST(bmain, 300, 1)) {
     /* Set zero user text objects to have a fake user. */
     for (Text &text : bmain->texts) {

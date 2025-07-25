@@ -340,9 +340,9 @@ static void versioning_replace_musgrave_texture_node(bNodeTree *ntree)
           bNode *sub2_node = bke::node_add_static_node(nullptr, *ntree, SH_NODE_MATH);
           sub2_node->parent = node.parent;
           sub2_node->custom1 = NODE_MATH_SUBTRACT;
-          sub2_node->custom2 = SHD_MATH_CLAMP;
-          sub2_node->locx_legacy = node.locx_legacy;
-          sub2_node->locy_legacy = node.locy_legacy + 120.0f;
+          // sub2_node->custom2 = SHD_MATH_CLAMP; // Removed: legacy clamp logic no longer used.
+          sub2_node->locx_legacy = node->locx_legacy;
+          sub2_node->locy_legacy = node->locy_legacy + 120.0f;
           sub2_node->flag |= NODE_COLLAPSED;
           bNodeSocket *sub2_socket_A = static_cast<bNodeSocket *>(
               BLI_findlink(&sub2_node->inputs, 0));

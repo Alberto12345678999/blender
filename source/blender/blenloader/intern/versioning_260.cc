@@ -661,7 +661,7 @@ static const char *node_get_static_idname(int type, int treetype)
         return "ShaderNodeRGBCurve";
       case SH_NODE_CAMERA:
         return "ShaderNodeCameraData";
-      case SH_NODE_MATH:
+      case SH_NODE_MATH_LEGACY:
         return "ShaderNodeMath";
       case SH_NODE_VECTOR_MATH:
         return "ShaderNodeVectorMath";

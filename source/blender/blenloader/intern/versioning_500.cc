@@ -1303,7 +1303,19 @@ static void do_version_convert_to_generic_nodes(bNodeTree *node_tree)
         break;
       }
       case CMP_NODE_MAP_VALUE_DEPRECATED: {
-        do_version_map_value_node(node_tree, &node);
+        do_version_map_value_node(node_tree, node);
+        break;
+      }
+      /* --- Legacy Math Node migration for Shader, Compositor, and Geometry Nodes: SH_NODE_MATH --- */
+      case SH_NODE_MATH_LEGACY: {
+        node->type_legacy = SH_NODE_MATH;
+        STRNCPY(node->idname, "ShaderNodeMath");
+
+        /* Transfer options from node to NodeShaderMath storage. */
+        NodeShaderMath *data = MEM_callocN<NodeShaderMath>(__func__);
+        data->operation = node->custom1;
+        data->use_clamp = node->custom2 & SHD_MATH_CLAMP ? 1 : 0;
+        node->storage = data;
         break;
       }
       default:
@@ -3650,11 +3662,11 @@ void blo_do_versions_500(FileData *fd, Library * /*lib*/, Main *bmain)
     }
   }
 
-  /* ImageFormatData gained a new media type which we need to be set according to the
-   * existing imtype. */
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 42)) {
-    for (Scene &scene : bmain->scenes) {
-      update_format_media_type(&scene.r.im_format);
+  /* ImageFormatData gained a new media type which we need to be set according to the existing
+   * imtype. */
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 41)) {
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      update_format_media_type(&scene->r.im_format);
     }
 
     FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
@@ -3683,118 +3695,32 @@ void blo_do_versions_500(FileData *fd, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_END;
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 43)) {
-    for (World &world : bmain->worlds) {
-      do_version_world_remove_use_nodes(bmain, &world);
-    }
-  }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 45)) {
-    FOREACH_NODETREE_BEGIN (bmain, node_tree, id) {
-      if (node_tree->type == NTREE_GEOMETRY) {
-        for (bNode &node : node_tree->nodes) {
-          if (node.type_legacy == GEO_NODE_FILL_CURVE) {
-            do_version_fill_curve_options_to_inputs(*node_tree, node);
-          }
-          else if (node.type_legacy == GEO_NODE_FILLET_CURVE) {
-            do_version_fillet_curve_options_to_inputs(*node_tree, node);
-          }
-          else if (node.type_legacy == GEO_NODE_RESAMPLE_CURVE) {
-            do_version_resample_curve_options_to_inputs(*node_tree, node);
-          }
-          else if (node.type_legacy == GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME) {
-            do_version_distribute_points_in_volume_options_to_inputs(*node_tree, node);
-          }
-          else if (node.type_legacy == GEO_NODE_MERGE_BY_DISTANCE) {
-            do_version_merge_by_distance_options_to_inputs(*node_tree, node);
-          }
-          else if (node.type_legacy == GEO_NODE_MESH_TO_VOLUME) {
-            do_version_mesh_to_volume_options_to_inputs(*node_tree, node);
-          }
-          else if (node.type_legacy == GEO_NODE_RAYCAST) {
-            do_version_raycast_options_to_inputs(*node_tree, node);
-          }
-          else if (node.type_legacy == GEO_NODE_REMOVE_ATTRIBUTE) {
-            do_version_remove_attribute_options_to_inputs(*node_tree, node);
-          }
-          else if (node.type_legacy == GEO_NODE_SAMPLE_GRID) {
-            do_version_sample_grid_options_to_inputs(*node_tree, node);
-          }
-          else if (node.type_legacy == GEO_NODE_SCALE_ELEMENTS) {
-            do_version_scale_elements_options_to_inputs(*node_tree, node);
-          }
-          else if (node.type_legacy == GEO_NODE_SET_CURVE_NORMAL) {
-            do_version_set_curve_normal_options_to_inputs(*node_tree, node);
-          }
-          else if (node.type_legacy == GEO_NODE_SUBDIVISION_SURFACE) {
-            do_version_subdivision_surface_options_to_inputs(*node_tree, node);
-          }
-          else if (node.type_legacy == GEO_NODE_UV_PACK_ISLANDS) {
-            do_version_uv_pack_islands_options_to_inputs(*node_tree, node);
-          }
-          else if (node.type_legacy == GEO_NODE_UV_UNWRAP) {
-            do_version_uv_unwrap_options_to_inputs(*node_tree, node);
-          }
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 42)) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      /* Make sure typeinfo is valid if you really must touch socket declarations here. */
+      blender::bke::node_tree_set_type(*ntree);
+      if (!ELEM(ntree->type, NTREE_SHADER, NTREE_COMPOSIT, NTREE_GEOMETRY)) {
+        continue;
+      }
+      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+        if (node->type_legacy == SH_NODE_MATH && node->storage == nullptr) {
+          NodeShaderMath *storage = MEM_callocN<NodeShaderMath>(__func__);
+          storage->operation = node->custom1;
+          storage->use_clamp = (node->custom2 & SHD_MATH_CLAMP) ? 1 : 0;
+          node->storage = storage;
         }
       }
     }
     FOREACH_NODETREE_END;
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 46)) {
-    /* Versioning from 0a0dd4ca37 was wrong, it only created asset shelf regions for Node Editors
-     * that are Compositors. If you change a non-Node Editor (e.g. an Image Editor) to a Compositor
-     * Editor, all is fine (SpaceLink *node_create gets called, the regions set up correctly), but
-     * changing an existing Node Editor (e.g. Shader or Geometry Nodes) to a Compositor, no new
-     * Space gets set up (rightfully so) and we are then missing the regions. Now corrected below
-     * (version bump in 5.1 since that is also affected). */
-  }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 48)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 42)) {
     FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
-      if (ntree->type != NTREE_COMPOSIT) {
-        continue;
-      }
-      for (bNode &node : ntree->nodes) {
-        if (node.type_legacy != CMP_NODE_ROTATE) {
-          continue;
-        }
-        if (node.storage != nullptr) {
-          continue;
-        }
-        NodeRotateData *data = MEM_new<NodeRotateData>(__func__);
-        data->interpolation = node.custom1;
-        data->extension_x = CMP_NODE_EXTENSION_MODE_CLIP;
-        data->extension_y = CMP_NODE_EXTENSION_MODE_CLIP;
-        node.storage = data;
-      }
-      FOREACH_NODETREE_END;
-    }
-  }
-
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 49)) {
-    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
-      if (ntree->type != NTREE_COMPOSIT) {
-        continue;
-      }
-      for (bNode &node : ntree->nodes) {
-        if (node.type_legacy != CMP_NODE_DISPLACE) {
-          continue;
-        }
-        if (node.storage == nullptr) {
-          continue;
-        }
-        NodeDisplaceData *data = static_cast<NodeDisplaceData *>(node.storage);
-        data->extension_x = CMP_NODE_EXTENSION_MODE_CLIP;
-        data->extension_y = CMP_NODE_EXTENSION_MODE_CLIP;
-      }
-      FOREACH_NODETREE_END;
-    }
-  }
-
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 50)) {
-    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
-      if (ntree->type != NTREE_COMPOSIT) {
+      /* Make sure typeinfo is valid if you really must touch socket declarations here. */
+      blender::bke::node_tree_set_type(*ntree);
+      if (!ELEM(ntree->type, NTREE_SHADER, NTREE_COMPOSIT, NTREE_GEOMETRY)) {
         continue;
       }
       for (bNode &node : ntree->nodes) {
