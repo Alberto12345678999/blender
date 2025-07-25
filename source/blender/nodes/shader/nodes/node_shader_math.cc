@@ -6,7 +6,6 @@
  * \ingroup shdnodes
  */
 
-#include "node_shader_util.hh"
 #include "node_util.hh"
 
 #include "BKE_node.hh"
@@ -17,12 +16,16 @@
 #include "NOD_value_elem_eval.hh"
 
 #include "RNA_enum_types.hh"
+#include "node_shader_util.hh"
 
-namespace blender {
+#include "UI_interface_layout.hh"
+#include "UI_resources.hh"
 
 /* **************** SCALAR MATH ******************** */
 
-namespace nodes::node_shader_math_cc {
+namespace blender::nodes::node_shader_math_cc {
+
+  NODE_STORAGE_FUNCS(NodeShaderMath)
 
 static void sh_node_math_declare(NodeDeclarationBuilder &b)
 {
@@ -123,7 +126,6 @@ static void math_input_defaults(bNode &node, const NodeMathOperation mode)
       break;
   }
 }
-
 class SocketSearchOp {
  public:
   UString socket_name;
@@ -164,6 +166,14 @@ static void sh_node_math_gather_link_searches(GatherLinkSearchOpParams &params)
   }
 }
 
+static void node_shader_math_init(bNodeTree * /*tree*/, bNode *node)
+{
+  NodeShaderMath *data = MEM_callocN<NodeShaderMath>(__func__);
+  data->operation = NODE_MATH_ADD;
+  data->use_clamp = 0;
+  node->storage = data;
+}
+
 static const char *gpu_shader_get_name(int mode)
 {
   const FloatMathOperationInfo *info = get_float_math_operation_info(mode);
@@ -182,11 +192,11 @@ static int gpu_shader_math(GPUMaterial *mat,
                            GPUNodeStack *in,
                            GPUNodeStack *out)
 {
-  const char *name = gpu_shader_get_name(node->custom1);
+  const NodeShaderMath &storage = node_storage(*node);
+  const char *name = gpu_shader_get_name(storage.operation);
   if (name != nullptr) {
     int ret = GPU_stack_link(mat, node, name, in, out);
-
-    if (ret && node->custom2 & SHD_MATH_CLAMP) {
+    if (ret && storage.use_clamp) {
       float min[3] = {0.0f, 0.0f, 0.0f};
       float max[3] = {1.0f, 1.0f, 1.0f};
       GPU_link(
@@ -194,14 +204,14 @@ static int gpu_shader_math(GPUMaterial *mat,
     }
     return ret;
   }
-
   return 0;
 }
 
 static void node_eval_elem(value_elem::ElemEvalParams &params)
 {
   using namespace value_elem;
-  const NodeMathOperation op = NodeMathOperation(params.node.custom1);
+  const NodeShaderMath &storage = node_storage(params.node);
+  const NodeMathOperation op = NodeMathOperation(storage.operation);
   switch (op) {
     case NODE_MATH_ADD:
     case NODE_MATH_SUBTRACT:
@@ -219,7 +229,8 @@ static void node_eval_elem(value_elem::ElemEvalParams &params)
 
 static void node_eval_inverse_elem(value_elem::InverseElemEvalParams &params)
 {
-  const NodeMathOperation op = NodeMathOperation(params.node.custom1);
+  const NodeShaderMath &storage = node_storage(params.node);
+  const NodeMathOperation op = NodeMathOperation(storage.operation);
   switch (op) {
     case NODE_MATH_ADD:
     case NODE_MATH_SUBTRACT:
@@ -271,10 +282,12 @@ static void node_eval_inverse(inverse_eval::InverseEvalParams &params)
   }
 }
 
+
 NODE_SHADER_MATERIALX_BEGIN
 #ifdef WITH_MATERIALX
 {
-  NodeMathOperation op = NodeMathOperation(node_->custom1);
+  const NodeShaderMath &storage = node_storage(*node_);
+  NodeMathOperation op = NodeMathOperation(storage.operation);
   NodeItem res = empty();
 
   /* Single operand operations */
@@ -440,8 +453,7 @@ NODE_SHADER_MATERIALX_BEGIN
     }
   }
 
-  bool clamp_output = node_->custom2 != 0;
-  if (clamp_output && res) {
+  if (storage.use_clamp && res) {
     res = res.clamp();
   }
 
@@ -465,9 +477,13 @@ void register_node_type_sh_math()
   ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.declare = file_ns::sh_node_math_declare;
   ntype.labelfunc = node_math_label;
+  ntype.draw_buttons = file_ns::node_shader_buts_math;
   ntype.gpu_fn = file_ns::gpu_shader_math;
   ntype.updatefunc = node_math_update;
-  ntype.build_multi_function = nodes::node_math_build_multi_function;
+  ntype.initfunc = file_ns::node_shader_math_init;
+  blender::bke::node_type_storage(
+      ntype, "NodeShaderMath", node_free_standard_storage, node_copy_standard_storage);
+  ntype.build_multi_function = blender::nodes::node_math_build_multi_function;
   ntype.gather_link_search_ops = file_ns::sh_node_math_gather_link_searches;
   ntype.materialx_fn = file_ns::node_shader_materialx;
   ntype.eval_elem = file_ns::node_eval_elem;

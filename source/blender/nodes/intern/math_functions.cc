@@ -1,12 +1,14 @@
 /* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
-
+#include "DNA_node_types.h"
 #include "NOD_math_functions.hh"
 
 #include "FN_multi_function_registry.hh"
 
 namespace blender::nodes {
+
+  NODE_STORAGE_FUNCS(NodeShaderMath)
 
 static const mf::MultiFunction *get_base_multi_function(const bNode &node)
 {
@@ -55,7 +57,9 @@ void node_math_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   const mf::MultiFunction *base_function = get_base_multi_function(builder.node());
 
-  const bool clamp_output = builder.node().custom2 != 0;
+  /* Use the new use_clamp field from NodeShaderMath storage (int8_t). */
+  const NodeShaderMath *storage = static_cast<const NodeShaderMath *>(builder.node().storage);
+  const bool clamp_output = storage && storage->use_clamp;
   if (clamp_output) {
     builder.construct_and_set_matching_fn<ClampWrapperFunction>(*base_function);
   }

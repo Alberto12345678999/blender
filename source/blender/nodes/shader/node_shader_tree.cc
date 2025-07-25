@@ -535,8 +535,11 @@ static void ntree_shader_weight_tree_invert(bNodeTree *ntree, bNode *output_node
         case SH_NODE_ADD_SHADER: {
           /* Simple passthrough node. Each original inputs will get the same weight. */
           /* TODO(fclem): Better use some kind of reroute node? */
-          nodes_copy[id] = bke::node_add_static_node(nullptr, *ntree, SH_NODE_MATH);
-          nodes_copy[id]->custom1 = NODE_MATH_ADD;
+          nodes_copy[id] = blender::bke::node_add_static_node(nullptr, *ntree, SH_NODE_MATH);
+          // Migrate legacy Math node operation assignment to storage struct.
+          if (NodeShaderMath *storage = static_cast<NodeShaderMath *>(nodes_copy[id]->storage)) {
+            storage->operation = NODE_MATH_ADD;
+          }
           nodes_copy[id]->runtime->tmp_flag = -2; /* Copy */
           ((bNodeSocketValueFloat *)ntree_shader_node_input_get(nodes_copy[id], 0)->default_value)
               ->value = 0.0f;
@@ -548,19 +551,25 @@ static void ntree_shader_weight_tree_invert(bNodeTree *ntree, bNode *output_node
           bNodeSocket *fromsock, *tosock;
           int id_start = id;
           /* output = (factor * input_weight) */
-          nodes_copy[id] = bke::node_add_static_node(nullptr, *ntree, SH_NODE_MATH);
-          nodes_copy[id]->custom1 = NODE_MATH_MULTIPLY;
+          nodes_copy[id] = blender::bke::node_add_static_node(nullptr, *ntree, SH_NODE_MATH);
+          if (NodeShaderMath *storage = static_cast<NodeShaderMath *>(nodes_copy[id]->storage)) {
+            storage->operation = NODE_MATH_MULTIPLY;
+          }
           nodes_copy[id]->runtime->tmp_flag = -2; /* Copy */
           id++;
           /* output = ((1.0 - factor) * input_weight) <=> (input_weight - factor * input_weight) */
-          nodes_copy[id] = bke::node_add_static_node(nullptr, *ntree, SH_NODE_MATH);
-          nodes_copy[id]->custom1 = NODE_MATH_SUBTRACT;
+          nodes_copy[id] = blender::bke::node_add_static_node(nullptr, *ntree, SH_NODE_MATH);
+          if (NodeShaderMath *storage = static_cast<NodeShaderMath *>(nodes_copy[id]->storage)) {
+            storage->operation = NODE_MATH_SUBTRACT;
+          }
           nodes_copy[id]->runtime->tmp_flag = -2; /* Copy */
           id++;
           /* Node sanitizes the input mix factor by clamping it. */
           nodes_copy[id] = bke::node_add_static_node(nullptr, *ntree, SH_NODE_MATH);
           nodes_copy[id]->custom1 = NODE_MATH_ADD;
-          nodes_copy[id]->custom2 = SHD_MATH_CLAMP;
+          NodeShaderMath *storage = static_cast<NodeShaderMath *>(nodes_copy[id]->storage);
+          BLI_assert(storage);
+          storage->use_clamp = true;
           nodes_copy[id]->runtime->tmp_flag = -2; /* Copy */
           ((bNodeSocketValueFloat *)ntree_shader_node_input_get(nodes_copy[id], 0)->default_value)
               ->value = 0.0f;

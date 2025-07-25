@@ -8,13 +8,18 @@
 
 #include "BLI_listbase.hh"
 #include "BLI_math_rotation_c.hh"
+#include "BKE_node.hh"
+
+#include "DNA_node_types.h"
+
 #include "node_texture_util.hh"
 #include "node_util.hh"
 
 namespace blender {
 
 /* **************** SCALAR MATH ******************** */
-static bke::bNodeSocketTemplate inputs[] = {
+
+static blender::bke::bNodeSocketTemplate inputs[] = {
     {SOCK_FLOAT, N_("Value"), 0.5f, 0.5f, 0.5f, 1.0f, -100.0f, 100.0f, PROP_NONE},
     {SOCK_FLOAT, N_("Value"), 0.5f, 0.5f, 0.5f, 1.0f, -100.0f, 100.0f, PROP_NONE},
     {SOCK_FLOAT, N_("Value"), 0.0f, 0.5f, 0.5f, 1.0f, -100.0f, 100.0f, PROP_NONE},
@@ -26,13 +31,26 @@ static bke::bNodeSocketTemplate outputs[] = {
     {-1, ""},
 };
 
+NODE_STORAGE_FUNCS(NodeShaderMath)
+
+static void node_texture_math_init(bNodeTree * /*tree*/, bNode *node)
+{
+  NodeShaderMath *data = MEM_callocN<NodeShaderMath>(__func__);
+  data->operation = NODE_MATH_ADD;
+  data->use_clamp = 0;
+  node->storage = data;
+}
+
 static void valuefn(float *out, TexParams *p, bNode *node, bNodeStack **in, short thread)
 {
   float in0 = tex_input_value(in[0], p, thread);
   float in1 = tex_input_value(in[1], p, thread);
 
-  switch (node->custom1) {
+  const NodeShaderMath &storage = node_storage(*node);
+  const int operation = storage.operation;
+  const bool use_clamp = storage.use_clamp != 0;
 
+  switch (operation) {
     case NODE_MATH_ADD:
       *out = in0 + in1;
       break;
@@ -44,7 +62,6 @@ static void valuefn(float *out, TexParams *p, bNode *node, bNodeStack **in, shor
       break;
     case NODE_MATH_DIVIDE: {
       if (in1 == 0) {
-        /* We don't want to divide by zero. */
         *out = 0.0;
       }
       else {
@@ -77,7 +94,6 @@ static void valuefn(float *out, TexParams *p, bNode *node, bNodeStack **in, shor
       break;
     }
     case NODE_MATH_ARCSINE: {
-      /* Can't do the impossible... */
       if (in0 <= 1 && in0 >= -1) {
         *out = asinf(in0);
       }
@@ -87,7 +103,6 @@ static void valuefn(float *out, TexParams *p, bNode *node, bNodeStack **in, shor
       break;
     }
     case NODE_MATH_ARCCOSINE: {
-      /* Can't do the impossible... */
       if (in0 <= 1 && in0 >= -1) {
         *out = acosf(in0);
       }
@@ -101,7 +116,6 @@ static void valuefn(float *out, TexParams *p, bNode *node, bNodeStack **in, shor
       break;
     }
     case NODE_MATH_POWER: {
-      /* Only raise negative numbers by full integers */
       if (in0 >= 0) {
         out[0] = pow(in0, in1);
       }
@@ -117,7 +131,6 @@ static void valuefn(float *out, TexParams *p, bNode *node, bNodeStack **in, shor
       break;
     }
     case NODE_MATH_LOGARITHM: {
-      /* Don't want any imaginary numbers... */
       if (in0 > 0 && in1 > 0) {
         *out = log(in0) / log(in1);
       }
@@ -148,7 +161,6 @@ static void valuefn(float *out, TexParams *p, bNode *node, bNodeStack **in, shor
       *out = (in0 < 0) ? int(in0 - 0.5f) : int(in0 + 0.5f);
       break;
     }
-
     case NODE_MATH_LESS_THAN: {
       if (in0 < in1) {
         *out = 1.0f;
@@ -158,7 +170,6 @@ static void valuefn(float *out, TexParams *p, bNode *node, bNodeStack **in, shor
       }
       break;
     }
-
     case NODE_MATH_GREATER_THAN: {
       if (in0 > in1) {
         *out = 1.0f;
@@ -168,7 +179,6 @@ static void valuefn(float *out, TexParams *p, bNode *node, bNodeStack **in, shor
       }
       break;
     }
-
     case NODE_MATH_MODULO: {
       if (in1 == 0.0f) {
         *out = 0.0f;
@@ -178,7 +188,6 @@ static void valuefn(float *out, TexParams *p, bNode *node, bNodeStack **in, shor
       }
       break;
     }
-
     case NODE_MATH_FLOORED_MODULO: {
       if (in1 == 0.0f) {
         *out = 0.0f;
@@ -188,52 +197,42 @@ static void valuefn(float *out, TexParams *p, bNode *node, bNodeStack **in, shor
       }
       break;
     }
-
     case NODE_MATH_ABSOLUTE: {
       *out = fabsf(in0);
       break;
     }
-
     case NODE_MATH_RADIANS: {
       *out = DEG2RADF(in0);
       break;
     }
-
     case NODE_MATH_DEGREES: {
       *out = RAD2DEGF(in0);
       break;
     }
-
     case NODE_MATH_ARCTAN2: {
       *out = atan2(in0, in1);
       break;
     }
-
     case NODE_MATH_SIGN: {
       *out = compatible_signf(in0);
       break;
     }
-
     case NODE_MATH_EXPONENT: {
       *out = expf(in0);
       break;
     }
-
     case NODE_MATH_FLOOR: {
       *out = floorf(in0);
       break;
     }
-
     case NODE_MATH_CEIL: {
       *out = ceilf(in0);
       break;
     }
-
     case NODE_MATH_FRACTION: {
       *out = in0 - floorf(in0);
       break;
     }
-
     case NODE_MATH_SQRT: {
       if (in0 > 0.0f) {
         *out = sqrtf(in0);
@@ -243,7 +242,6 @@ static void valuefn(float *out, TexParams *p, bNode *node, bNodeStack **in, shor
       }
       break;
     }
-
     case NODE_MATH_INV_SQRT: {
       if (in0 > 0.0f) {
         *out = 1.0f / sqrtf(in0);
@@ -253,7 +251,6 @@ static void valuefn(float *out, TexParams *p, bNode *node, bNodeStack **in, shor
       }
       break;
     }
-
     case NODE_MATH_TRUNC: {
       if (in0 > 0.0f) {
         *out = floorf(in0);
@@ -263,7 +260,6 @@ static void valuefn(float *out, TexParams *p, bNode *node, bNodeStack **in, shor
       }
       break;
     }
-
     case NODE_MATH_SNAP: {
       if (in1 == 0) {
         *out = 0.0;
@@ -273,49 +269,41 @@ static void valuefn(float *out, TexParams *p, bNode *node, bNodeStack **in, shor
       }
       break;
     }
-
     case NODE_MATH_WRAP: {
       float in2 = tex_input_value(in[2], p, thread);
       *out = wrapf(in0, in1, in2);
       break;
     }
-
     case NODE_MATH_PINGPONG: {
       *out = pingpongf(in0, in1);
       break;
     }
-
     case NODE_MATH_COMPARE: {
       float in2 = tex_input_value(in[2], p, thread);
       *out = (fabsf(in0 - in1) <= std::max(in2, 1e-5f)) ? 1.0f : 0.0f;
       break;
     }
-
     case NODE_MATH_MULTIPLY_ADD: {
       float in2 = tex_input_value(in[2], p, thread);
       *out = in0 * in1 + in2;
       break;
     }
-
     case NODE_MATH_SMOOTH_MIN: {
       float in2 = tex_input_value(in[2], p, thread);
       *out = smoothminf(in0, in1, in2);
       break;
     }
-
     case NODE_MATH_SMOOTH_MAX: {
       float in2 = tex_input_value(in[2], p, thread);
       *out = -smoothminf(-in0, -in1, in2);
       break;
     }
-
     default: {
       BLI_assert(0);
       break;
     }
   }
-
-  if (node->custom2 & SHD_MATH_CLAMP) {
+  if (use_clamp) {
     CLAMP(*out, 0.0f, 1.0f);
   }
 }
@@ -395,7 +383,10 @@ void register_node_type_tex_math()
   bke::node_type_socket_templates(&ntype, inputs, outputs);
   ntype.labelfunc = node_math_label;
   ntype.exec_fn = exec;
-  ntype.updatefunc = node_update;
+  ntype.updatefunc = node_math_update;
+  ntype.initfunc = node_texture_math_init;
+  blender::bke::node_type_storage(
+      ntype, "NodeShaderMath", node_free_standard_storage, node_copy_standard_storage);
 
   bke::node_register_type(ntype);
 }
