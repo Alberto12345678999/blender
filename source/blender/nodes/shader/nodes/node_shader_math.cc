@@ -95,7 +95,7 @@ static void sh_node_math_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Float>("Value"_ustr);
 }
 
-static void math_input_defaults(bNode &node, const NodeMathOperation mode)
+static void math_input_defaults(bNode &node, const NodeMathOperation op)
 {
   bNodeSocket *socket_2 = bke::node_find_socket(node, SOCK_IN, "Value_001"_ustr);
   BLI_assert(socket_2 != nullptr);
@@ -105,7 +105,7 @@ static void math_input_defaults(bNode &node, const NodeMathOperation mode)
   BLI_assert(socket_3 != nullptr);
   float &value_3 = socket_3->default_value_typed<bNodeSocketValueFloat>()->value;
 
-  switch (mode) {
+  switch (op) {
     case NODE_MATH_MULTIPLY:
     case NODE_MATH_DIVIDE:
     case NODE_MATH_POWER:
