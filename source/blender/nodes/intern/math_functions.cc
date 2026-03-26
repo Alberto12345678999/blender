@@ -13,8 +13,8 @@ NODE_STORAGE_FUNCS(NodeShaderMath)
 
 static const mf::MultiFunction *get_base_multi_function(const bNode &node)
 {
-  const int mode = node.custom1;
-  const FloatMathOperationInfo *info = get_float_math_operation_info(mode);
+  const NodeShaderMath &storage = node_storage(node);
+  const FloatMathOperationInfo *info = get_float_math_operation_info(storage.operation);
   if (!info) {
     return nullptr;
   }

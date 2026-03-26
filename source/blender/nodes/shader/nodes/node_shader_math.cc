@@ -135,11 +135,18 @@ class SocketSearchOp {
   void operator()(LinkSearchOpParams &params)
   {
     bNode &node = params.add_node("ShaderNodeMath"_ustr);
-    node.custom1 = mode;
+    node_storage(node).operation = mode;
+    node_storage(node).use_clamp = false;
     math_input_defaults(node, mode);
     params.update_and_connect_available_socket(node, socket_name);
   }
 };
+
+static void node_shader_buts_math(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
+{
+  layout.prop(ptr, "operation", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
+  layout.prop(ptr, "use_clamp", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+}
 
 static void sh_node_math_gather_link_searches(GatherLinkSearchOpParams &params)
 {
