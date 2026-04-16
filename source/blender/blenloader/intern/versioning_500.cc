@@ -2835,7 +2835,7 @@ void do_versions_after_linking_500(FileData *fd, Main *bmain)
       }
       BKE_pose_rebuild(nullptr, &object, id_cast<bArmature *>(object.data), false);
       for (bPoseChannel &pose_bone : object.pose->chanbase) {
-        if (pose_bone.bone->flag & BONE_HIDDEN_P) {
+        if (pose_bone.bone_get(object)->flag & BONE_HIDDEN_P) {
           pose_bone.drawflag |= PCHAN_DRAW_HIDDEN;
         }
         else {
@@ -4268,7 +4268,7 @@ void blo_do_versions_500(FileData *fd, Library * /*lib*/, Main *bmain)
     /* Enable new "Optional Label" setting for all menu sockets. This was implicit before. */
     FOREACH_NODETREE_BEGIN (bmain, tree, id) {
       tree->tree_interface.foreach_item([&](bNodeTreeInterfaceItem &item) {
-        if (item.item_type != NODE_INTERFACE_SOCKET) {
+        if (item.item_type != NodeTreeInterfaceItemType::Socket) {
           return true;
         }
         auto &socket = reinterpret_cast<bNodeTreeInterfaceSocket &>(item);
@@ -4505,7 +4505,7 @@ void blo_do_versions_500(FileData *fd, Library * /*lib*/, Main *bmain)
     }
     FOREACH_NODETREE_END;
   }
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 502, 14)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 8)) {
     FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
       bke::node_tree_set_type(*ntree);
       for (bNode &node : ntree->nodes) {

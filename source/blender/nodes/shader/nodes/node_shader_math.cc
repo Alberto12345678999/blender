@@ -37,7 +37,7 @@ static void sh_node_math_declare(NodeDeclarationBuilder &b)
       .min(-10000.0f)
       .max(10000.0f)
       .label_fn([](const bNode &node) {
-        switch (node.custom1) {
+        switch (node_storage(node).operation) {
           case NODE_MATH_POWER:
             return IFACE_("Base");
           case NODE_MATH_DEGREES:
@@ -53,7 +53,7 @@ static void sh_node_math_declare(NodeDeclarationBuilder &b)
       .min(-10000.0f)
       .max(10000.0f)
       .label_fn([](const bNode &node) {
-        switch (node.custom1) {
+        switch (node_storage(node).operation) {
           case NODE_MATH_WRAP:
             return IFACE_("Max");
           case NODE_MATH_MULTIPLY_ADD:
@@ -78,7 +78,7 @@ static void sh_node_math_declare(NodeDeclarationBuilder &b)
       .min(-10000.0f)
       .max(10000.0f)
       .label_fn([](const bNode &node) {
-        switch (node.custom1) {
+        switch (node_storage(node).operation) {
           case NODE_MATH_WRAP:
             return IFACE_("Min");
           case NODE_MATH_MULTIPLY_ADD:
