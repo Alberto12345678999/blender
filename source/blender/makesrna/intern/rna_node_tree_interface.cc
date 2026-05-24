@@ -22,12 +22,18 @@ namespace blender {
 
 const EnumPropertyItem rna_enum_node_tree_interface_item_type_items[] = {
     {int(NodeTreeInterfaceItemType::Socket), "SOCKET", 0, "Socket", ""},
+    {int(NodeTreeInterfaceItemType::Row), "ROW", 0, "Row", ""},
     {int(NodeTreeInterfaceItemType::Panel), "PANEL", 0, "Panel", ""},
     {0, nullptr, 0, nullptr, nullptr}};
 
 static const EnumPropertyItem node_tree_interface_socket_in_out_items[] = {
     {NODE_INTERFACE_SOCKET_INPUT, "INPUT", 0, "Input", "Generate a input node socket"},
     {NODE_INTERFACE_SOCKET_OUTPUT, "OUTPUT", 0, "Output", "Generate a output node socket"},
+    {0, nullptr, 0, nullptr, nullptr}};
+
+static const EnumPropertyItem node_tree_interface_layout_type_items[] = {
+    {int(NodeTreeInterfaceLayoutType::Panel), "PANEL", 0, "Panel", "Display items in a panel"},
+    {int(NodeTreeInterfaceLayoutType::Row), "ROW", 0, "Row", "Display items in a row"},
     {0, nullptr, 0, nullptr, nullptr}};
 
 const EnumPropertyItem rna_enum_node_socket_structure_type_items[] = {
@@ -171,6 +177,7 @@ static StructRNA *rna_NodeTreeInterfaceItem_refine(PointerRNA *ptr)
       }
       return RNA_NodeTreeInterfaceSocket;
     }
+    case NodeTreeInterfaceItemType::Row:
     case NodeTreeInterfaceItemType::Panel:
       return RNA_NodeTreeInterfacePanel;
     default:
@@ -1161,6 +1168,9 @@ static bool rna_NodeTreeInterface_items_lookup_string(PointerRNA *ptr,
         }
         break;
       }
+      case NodeTreeInterfaceItemType::Row:
+      case NodeTreeInterfaceItemType::Panel:
+        break;
       default:
         break;
     }
@@ -1175,6 +1185,7 @@ static bool rna_NodeTreeInterface_items_lookup_string(PointerRNA *ptr,
         }
         break;
       }
+      case NodeTreeInterfaceItemType::Row:
       case NodeTreeInterfaceItemType::Panel: {
         bNodeTreeInterfacePanel *panel = reinterpret_cast<bNodeTreeInterfacePanel *>(item);
         if (STREQ(panel->name, key)) {
@@ -1522,6 +1533,12 @@ static void rna_def_node_interface_panel(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Identifier", "Unique identifier for this panel within this node tree");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+    prop = RNA_def_property(srna, "layout_type", PROP_ENUM, PROP_NONE);
+    RNA_def_property_enum_sdna(prop, nullptr, "layout_type");
+    RNA_def_property_enum_items(prop, node_tree_interface_layout_type_items);
+    RNA_def_property_ui_text(prop, "Layout Type", "Layout type of the panel (panel or row)");
+    RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_NodeTreeInterfaceItem_update");
 }
 
 static void rna_def_node_tree_interface_items_api(StructRNA *srna)

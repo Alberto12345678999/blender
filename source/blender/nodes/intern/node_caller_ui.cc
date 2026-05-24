@@ -34,7 +34,7 @@ static bool interface_panel_has_socket(
         }
       }
     }
-    else if (item->item_type == NodeTreeInterfaceItemType::Panel) {
+    else if (ELEM(item->item_type, NodeTreeInterfaceItemType::Panel)) {
       const auto &panel_item = *reinterpret_cast<const bNodeTreeInterfacePanel *>(item);
       if (interface_panel_has_socket(panel_item, fn_input_is_visible)) {
         return true;
@@ -61,7 +61,7 @@ static bool interface_panel_affects_output(
         return true;
       }
     }
-    else if (item->item_type == NodeTreeInterfaceItemType::Panel) {
+    else if (ELEM(item->item_type, NodeTreeInterfaceItemType::Panel)) {
       const auto &sub_interface_panel = *reinterpret_cast<const bNodeTreeInterfacePanel *>(item);
       if (interface_panel_affects_output(sub_interface_panel, fn_input_is_active)) {
         return true;
@@ -146,6 +146,7 @@ void draw_interface_panel_content(
   for (const bNodeTreeInterfaceItem *item : interface_panel.items().drop_front(skip_first ? 1 : 0))
   {
     switch (item->item_type) {
+      case NodeTreeInterfaceItemType::Row:
       case NodeTreeInterfaceItemType::Panel: {
         const auto &sub_interface_panel = *reinterpret_cast<const bNodeTreeInterfacePanel *>(item);
         draw_interface_panel_as_panel(C,

@@ -2,8 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_library.hh"
 #include "BKE_screen.hh"
+#include "BKE_library.hh"
 
 #include "BLI_listbase.hh"
 #include "BLI_string_utf8.hh"
@@ -90,9 +90,12 @@ void node_tree_interface_draw(bContext &C, ui::Layout &layout, bNodeTree &tree)
       stype->interface_draw(&tree.id, socket, &C, &layout);
     }
   }
-  if (active_item->item_type == NodeTreeInterfaceItemType::Panel) {
+  if (active_item->item_type == NodeTreeInterfaceItemType::Row ||
+      active_item->item_type == NodeTreeInterfaceItemType::Panel)
+  {
     bNodeTreeInterfacePanel *panel_item = reinterpret_cast<bNodeTreeInterfacePanel *>(active_item);
     layout.prop(&active_item_ptr, "description", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    layout.prop(&active_item_ptr, "layout_type", UI_ITEM_NONE, IFACE_("Layout"), ICON_NONE);
     layout.prop(
         &active_item_ptr, "default_closed", UI_ITEM_NONE, IFACE_("Closed by Default"), ICON_NONE);
 

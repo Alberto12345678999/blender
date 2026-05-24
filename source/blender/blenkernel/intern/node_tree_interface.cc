@@ -16,8 +16,11 @@
 #include "BKE_node_tree_update.hh"
 
 #include "BLI_math_vector_c.hh"
+#include "BLI_map.hh"
 #include "BLI_stack.hh"
 #include "BLI_string.hh"
+
+#include <string>
 
 #include "BLO_read_write.hh"
 
@@ -41,6 +44,22 @@
 namespace blender {
 
 namespace bke::node_interface {
+
+struct bNodeTreeInterfaceUIConstraintsPanel {
+  enum class NodeDrawMode {
+    Flat,
+    Panel,
+    Aligned,
+  };
+
+  bool valid = true;
+  std::string message;
+  NodeDrawMode draw_mode = NodeDrawMode::Panel;
+};
+
+struct bNodeTreeInterfaceUIConstraints {
+  Map<const bNodeTreeInterfacePanel *, bNodeTreeInterfaceUIConstraintsPanel> panels;
+};
 
 namespace socket_types {
 
@@ -498,6 +517,7 @@ static void item_copy(bNodeTreeInterfaceItem &dst,
       }
       break;
     }
+    case NodeTreeInterfaceItemType::Row:
     case NodeTreeInterfaceItemType::Panel: {
       bNodeTreeInterfacePanel &dst_panel = reinterpret_cast<bNodeTreeInterfacePanel &>(dst);
       const bNodeTreeInterfacePanel &src_panel = reinterpret_cast<const bNodeTreeInterfacePanel &>(
@@ -533,6 +553,7 @@ static void item_free(bNodeTreeInterfaceItem &item, const bool do_id_user)
       }
       break;
     }
+    case NodeTreeInterfaceItemType::Row:
     case NodeTreeInterfaceItemType::Panel: {
       bNodeTreeInterfacePanel &panel = reinterpret_cast<bNodeTreeInterfacePanel &>(item);
 
@@ -565,6 +586,7 @@ static void item_write_data(BlendWriter *writer, bNodeTreeInterfaceItem &item)
       socket_types::socket_data_write(writer, socket);
       break;
     }
+    case NodeTreeInterfaceItemType::Row:
     case NodeTreeInterfaceItemType::Panel: {
       bNodeTreeInterfacePanel &panel = reinterpret_cast<bNodeTreeInterfacePanel &>(item);
       writer->write_string(panel.name);
@@ -649,6 +671,7 @@ void item_write_struct(BlendWriter *writer, bNodeTreeInterfaceItem &item)
 
       break;
     }
+    case NodeTreeInterfaceItemType::Row:
     case NodeTreeInterfaceItemType::Panel: {
       writer->write_struct_cast<bNodeTreeInterfacePanel>(&item);
       item_write_data(writer, item);
@@ -681,6 +704,7 @@ static void item_read_data(BlendDataReader *reader, bNodeTreeInterfaceItem &item
       socket_types::socket_data_read_data(reader, socket);
       break;
     }
+    case NodeTreeInterfaceItemType::Row:
     case NodeTreeInterfaceItemType::Panel: {
       bNodeTreeInterfacePanel &panel = reinterpret_cast<bNodeTreeInterfacePanel &>(item);
       BLO_read_string(reader, &panel.name);
@@ -722,6 +746,7 @@ static void item_foreach_id(LibraryForeachIDData *data, bNodeTreeInterfaceItem &
       socket_types::socket_data_foreach_id(data, socket);
       break;
     }
+    case NodeTreeInterfaceItemType::Row:
     case NodeTreeInterfaceItemType::Panel: {
       bNodeTreeInterfacePanel &panel = reinterpret_cast<bNodeTreeInterfacePanel &>(item);
       for (bNodeTreeInterfaceItem *item : panel.items()) {
@@ -739,6 +764,7 @@ static Span<bNodeTreeInterfaceItem *> item_children(bNodeTreeInterfaceItem &item
     case NodeTreeInterfaceItemType::Socket: {
       return {};
     }
+    case NodeTreeInterfaceItemType::Row:
     case NodeTreeInterfaceItemType::Panel: {
       bNodeTreeInterfacePanel &panel = reinterpret_cast<bNodeTreeInterfacePanel &>(item);
       return panel.items();
@@ -1233,6 +1259,47 @@ bNodeTreeInterfaceSocket *bNodeTreeInterfacePanel::header_toggle_socket()
 
 namespace bke::node_interface {
 
+std::optional<NodeInterfaceInlineSockets> get_inline_sockets_if_valid(
+    const bNodeTreeInterfacePanel &panel, const bNodeTreeInterface &tree_interface)
+{
+  (void)tree_interface;
+  if (panel.layout_type != NodeTreeInterfaceLayoutType::Row) {
+    return std::nullopt;
+  }
+  /* Rows are only valid when they contain exactly two sockets (one input, one output). */
+  if (panel.items_num != 2) {
+    return std::nullopt;
+  }
+  if (panel.items_array[0]->item_type != NodeTreeInterfaceItemType::Socket) {
+    return std::nullopt;
+  }
+  if (panel.items_array[1]->item_type != NodeTreeInterfaceItemType::Socket) {
+    return std::nullopt;
+  }
+  const bNodeTreeInterfaceSocket &socket_a =
+      get_item_as<bNodeTreeInterfaceSocket>(*panel.items_array[0]);
+  const bNodeTreeInterfaceSocket &socket_b =
+      get_item_as<bNodeTreeInterfaceSocket>(*panel.items_array[1]);
+
+  NodeInterfaceInlineSockets inline_sockets;
+  if (socket_a.flag & NODE_INTERFACE_SOCKET_INPUT) {
+    inline_sockets.input = &socket_a;
+  }
+  else {
+    inline_sockets.output = &socket_a;
+  }
+  if (socket_b.flag & NODE_INTERFACE_SOCKET_INPUT) {
+    inline_sockets.input = &socket_b;
+  }
+  else {
+    inline_sockets.output = &socket_b;
+  }
+  if (!inline_sockets.input || !inline_sockets.output) {
+    return std::nullopt;
+  }
+  return inline_sockets;
+}
+
 static bNodeTreeInterfaceSocket *make_socket(const int uid,
                                              const StringRef name,
                                              const StringRef description,
@@ -1688,6 +1755,52 @@ static bNodeTreeInterfacePanel *make_panel(const int uid,
   return new_panel;
 }
 
+static void get_interface_ui_constraints_recursive(const bNodeTree &ntree,
+                                                   const bNodeTreeInterfacePanel &parent_panel,
+                                                   bNodeTreeInterfaceUIConstraints &r_results)
+{
+  int last_socket_index = -1;
+  for (int i = parent_panel.items_num - 1; i >= 0; i--) {
+    const bNodeTreeInterfaceItem *item = parent_panel.items_array[i];
+    const bool is_socket = item->item_type == NodeTreeInterfaceItemType::Socket;
+    if (is_socket) {
+      last_socket_index = i;
+      break;
+    }
+  }
+
+  for (const int i : blender::IndexRange(parent_panel.items_num)) {
+    const bNodeTreeInterfaceItem *item = parent_panel.items_array[i];
+    switch (item->item_type) {
+      case NodeTreeInterfaceItemType::Row:
+      case NodeTreeInterfaceItemType::Panel: {
+        const bNodeTreeInterfacePanel &panel = get_item_as<bNodeTreeInterfacePanel>(*item);
+        bNodeTreeInterfaceUIConstraintsPanel panel_constraint;
+
+        if (last_socket_index > i) {
+          panel_constraint.valid = false;
+          panel_constraint.message = TIP_("By convention, panels should be below sockets.");
+        }
+
+        r_results.panels.add_new(&panel, panel_constraint);
+        get_interface_ui_constraints_recursive(ntree, panel, r_results);
+        break;
+      }
+      case NodeTreeInterfaceItemType::Socket: {
+        break;
+      }
+    }
+  }
+}
+
+bNodeTreeInterfaceUIConstraints get_interface_ui_constraints(const bNodeTree &ntree)
+{
+  bNodeTreeInterfaceUIConstraints results;
+  results.panels.add_new(&ntree.tree_interface.root_panel, {});
+  get_interface_ui_constraints_recursive(ntree, ntree.tree_interface.root_panel, results);
+  return results;
+}
+
 void item_reference_free(bNodeTreeInterfaceItemReference *item_reference)
 {
   if (item_reference == nullptr) {
@@ -1770,6 +1883,7 @@ const bNodeTreeInterfaceItem *bNodeTreeInterface::active_item() const
 void bNodeTreeInterfaceItem::set_selected(const bool select)
 {
   switch (this->item_type) {
+    case NodeTreeInterfaceItemType::Row:
     case NodeTreeInterfaceItemType::Panel: {
       bNodeTreeInterfacePanel *panel =
           blender::bke::node_interface::get_item_as<bNodeTreeInterfacePanel>(this);

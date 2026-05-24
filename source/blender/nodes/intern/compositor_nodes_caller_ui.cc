@@ -169,6 +169,7 @@ static void draw_interface_root_panel_content(DrawGroupInputsContext &ctx,
   };
   for (const bNodeTreeInterfaceItem *item : interface_panel.items()) {
     switch (item->item_type) {
+      case NodeTreeInterfaceItemType::Row:
       case NodeTreeInterfaceItemType::Panel: {
         const auto &sub_interface_panel = *reinterpret_cast<const bNodeTreeInterfacePanel *>(item);
         draw_interface_panel_as_panel(

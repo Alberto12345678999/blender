@@ -479,9 +479,57 @@ static void node_group_declare_panel_recursive(
             group, io_socket, structure_type_by_socket.lookup_try(&io_socket), in_out, b);
         break;
       }
-      case NodeTreeInterfaceItemType::Panel: {
-        add_layout_if_needed();
+      case NodeTreeInterfaceItemType::Row: {
         const auto &io_panel = node_interface::get_item_as<bNodeTreeInterfacePanel>(*item);
+        if (io_panel.layout_type == NodeTreeInterfaceLayoutType::Row) {
+          if (const std::optional<bke::node_interface::NodeInterfaceInlineSockets> inline_sockets =
+                  bke::node_interface::get_inline_sockets_if_valid(io_panel,
+                                                                   group.tree_interface))
+          {
+            add_layout_if_needed();
+            build_interface_socket_declaration(
+                group,
+                *inline_sockets->input,
+                structure_type_by_socket.lookup_try(inline_sockets->input),
+                SOCK_IN,
+                b);
+            build_interface_socket_declaration(
+                group,
+                *inline_sockets->output,
+                structure_type_by_socket.lookup_try(inline_sockets->output),
+                SOCK_OUT,
+                b)
+                .align_with_previous();
+            break;
+          }
+        }
+        [[fallthrough]];
+      }
+      case NodeTreeInterfaceItemType::Panel: {
+        const auto &io_panel = node_interface::get_item_as<bNodeTreeInterfacePanel>(*item);
+        if (io_panel.layout_type == NodeTreeInterfaceLayoutType::Row) {
+          if (const std::optional<bke::node_interface::NodeInterfaceInlineSockets> inline_sockets =
+                  bke::node_interface::get_inline_sockets_if_valid(io_panel,
+                                                                   group.tree_interface))
+          {
+            add_layout_if_needed();
+            build_interface_socket_declaration(
+                group,
+                *inline_sockets->input,
+                structure_type_by_socket.lookup_try(inline_sockets->input),
+                SOCK_IN,
+                b);
+            build_interface_socket_declaration(
+                group,
+                *inline_sockets->output,
+                structure_type_by_socket.lookup_try(inline_sockets->output),
+                SOCK_OUT,
+                b)
+                .align_with_previous();
+            break;
+          }
+        }
+        add_layout_if_needed();
         auto &panel_b = b.add_panel(UString(io_panel.name), io_panel.identifier)
                             .description(StringRef(io_panel.description))
                             .default_closed(io_panel.flag & NODE_INTERFACE_PANEL_DEFAULT_CLOSED);
@@ -523,6 +571,7 @@ void node_group_declare(NodeDeclarationBuilder &b)
 
   /* Allow the node group interface to define the socket order. */
   r_declaration.use_custom_socket_order = true;
+  r_declaration.allow_any_socket_order = true;
 
   group->ensure_interface_cache();
 
@@ -998,6 +1047,7 @@ static void group_input_declare(NodeDeclarationBuilder &b)
         }
         break;
       }
+      case NodeTreeInterfaceItemType::Row:
       case NodeTreeInterfaceItemType::Panel: {
         break;
       }
@@ -1024,6 +1074,7 @@ static void group_output_declare(NodeDeclarationBuilder &b)
         }
         break;
       }
+      case NodeTreeInterfaceItemType::Row:
       case NodeTreeInterfaceItemType::Panel: {
         break;
       }

@@ -36,6 +36,13 @@ struct BlendDataReader;
 enum class NodeTreeInterfaceItemType : char {
   Panel = 0,
   Socket = 1,
+  Row = 2,
+};
+
+/** Type of panel layout. */
+enum class NodeTreeInterfaceLayoutType : uint32_t {
+  Panel = 0,
+  Row = 1,
 };
 
 /** Describes a socket and all necessary details for a node declaration. */
@@ -188,7 +195,7 @@ struct bNodeTreeInterfacePanel {
   char *name = nullptr;
   char *description = nullptr;
   NodeTreeInterfacePanelFlag flag = {};
-  char _pad[4] = {};
+  NodeTreeInterfaceLayoutType layout_type = NodeTreeInterfaceLayoutType::Panel;
 
   bNodeTreeInterfaceItem **items_array = nullptr;
   int items_num = 0;

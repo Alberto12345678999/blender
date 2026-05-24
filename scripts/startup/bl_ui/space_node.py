@@ -28,9 +28,7 @@ from bl_ui.properties_material import (
     EEVEE_MATERIAL_PT_settings_volume,
     MATERIAL_PT_viewport,
 )
-from bl_ui.properties_world import (
-    WORLD_PT_viewport_display
-)
+from bl_ui.properties_world import WORLD_PT_viewport_display
 from bl_ui.properties_data_light import (
     DATA_PT_light,
     DATA_PT_EEVEE_light,
@@ -67,7 +65,15 @@ class NODE_HT_header(Header):
 
                 NODE_MT_editor_menus.draw_collapsible(context, layout)
                 types_that_support_material = {
-                    'MESH', 'CURVE', 'SURFACE', 'FONT', 'META', 'GPENCIL', 'VOLUME', 'CURVES', 'POINTCLOUD',
+                    'MESH',
+                    'CURVE',
+                    'SURFACE',
+                    'FONT',
+                    'META',
+                    'GPENCIL',
+                    'VOLUME',
+                    'CURVES',
+                    'POINTCLOUD',
                 }
 
                 layout.separator_spacer()
@@ -165,19 +171,17 @@ class NODE_HT_header(Header):
                     is_compositor_effect_active = active_strip.type == 'COMPOSITOR'
                     if is_compositor_effect_active and not snode.pin:
                         row.template_ID(  # @TODO: duplicate operator
-                            active_strip,
-                            "node_group",
-                            new="node.new_compositor_sequencer_node_group")
+                            active_strip, "node_group", new="node.new_compositor_sequencer_node_group"
+                        )
                     elif is_compositor_modifier_active and not snode.pin:
                         if active_modifier.node_group:
-                            row.template_ID(active_modifier,
-                                            "node_group",
-                                            new="node.duplicate_compositing_modifier_node_group")
+                            row.template_ID(
+                                active_modifier, "node_group", new="node.duplicate_compositing_modifier_node_group"
+                            )
                         else:
                             row.template_ID(
-                                active_modifier,
-                                "node_group",
-                                new="node.new_compositor_sequencer_node_group")
+                                active_modifier, "node_group", new="node.new_compositor_sequencer_node_group"
+                            )
                     elif active_strip.type != 'SOUND':
                         row.template_ID(snode, "node_tree", new="node.new_compositor_sequencer_node_group")
 
@@ -516,8 +520,7 @@ class NODE_PT_material_slots(Panel):
     def draw_header(self, context):
         ob = context.object
         self.bl_label = (
-            iface_("Slot {:d}").format(ob.active_material_index + 1) if ob.material_slots else
-            iface_("Slot")
+            iface_("Slot {:d}").format(ob.active_material_index + 1) if ob.material_slots else iface_("Slot")
         )
 
     # Duplicate part of `EEVEE_MATERIAL_PT_context_material`.
@@ -632,6 +635,7 @@ class NODE_PT_geometry_node_tool_options(Panel):
 
 class NODE_PT_node_color_presets(PresetPanel, Panel):
     """Predefined node color"""
+
     bl_label = "Color Presets"
     preset_subdir = "node_color"
     preset_operator = "script.execute_preset"
@@ -695,7 +699,7 @@ class NODE_MT_context_menu(Menu):
 
     def draw(self, context):
         snode = context.space_data
-        is_nested = (len(snode.path) > 1)
+        is_nested = len(snode.path) > 1
         parent_tree_index = len(snode.path) - 2
         is_geometrynodes = snode.tree_type == 'GeometryNodeTree'
         group = snode.edit_tree
@@ -726,10 +730,9 @@ class NODE_MT_context_menu(Menu):
 
             if is_nested:
                 layout.separator()
-                layout.operator(
-                    "node.tree_path_parent",
-                    text="Exit Group",
-                    icon='FILE_PARENT').parent_tree_index = parent_tree_index
+                layout.operator("node.tree_path_parent", text="Exit Group", icon='FILE_PARENT').parent_tree_index = (
+                    parent_tree_index
+                )
 
             return
 
@@ -772,10 +775,9 @@ class NODE_MT_context_menu(Menu):
                 layout.operator("node.group_ungroup", text="Ungroup")
 
             if is_nested:
-                layout.operator(
-                    "node.tree_path_parent",
-                    text="Exit Group",
-                    icon='FILE_PARENT').parent_tree_index = parent_tree_index
+                layout.operator("node.tree_path_parent", text="Exit Group", icon='FILE_PARENT').parent_tree_index = (
+                    parent_tree_index
+                )
 
             layout.separator()
 
@@ -1031,13 +1033,13 @@ class NODE_MT_node_tree_interface_context_menu(Menu):
         layout = self.layout
         snode = context.space_data
         tree = snode.edit_tree
-        active_item = tree.interface.active
+        active_item = tree.interface.active if tree and tree.interface else None
 
         layout.operator("node.interface_item_duplicate", icon='DUPLICATE')
         layout.separator()
-        if active_item.item_type == 'SOCKET':
+        if active_item and active_item.item_type == 'SOCKET':
             layout.operator("node.interface_item_make_panel_toggle")
-        elif active_item.item_type == 'PANEL':
+        elif active_item and active_item.item_type == 'PANEL':
             layout.operator("node.interface_item_unlink_panel_toggle")
 
 
@@ -1048,7 +1050,8 @@ class NODE_MT_node_tree_interface_new_item(Menu):
         layout = self.layout
         layout.operator_enum("node.interface_item_new", "item_type")
 
-        active_item = context.space_data.edit_tree.interface.active
+        tree = context.space_data.edit_tree
+        active_item = tree.interface.active if tree and tree.interface else None
 
         if active_item and active_item.item_type == 'PANEL':
             layout.operator("node.interface_item_new_panel_toggle", text="Panel Toggle")
@@ -1214,12 +1217,11 @@ class NODE_AST_compositor(bpy.types.AssetShelf):
             "Transform and Project",
         }
 
-        compositor_essentials_path = Path(os.path.join(
-            bpy.utils.system_resource('DATAFILES'),
-            "assets",
-            "nodes",
-            "compositing_nodes_essentials.blend"
-        ))
+        compositor_essentials_path = Path(
+            os.path.join(
+                bpy.utils.system_resource('DATAFILES'), "assets", "nodes", "compositing_nodes_essentials.blend"
+            )
+        )
         if Path(asset.full_library_path) == compositor_essentials_path:
             if asset.name in ignored_essentials:
                 return False
@@ -1260,7 +1262,6 @@ classes = (
     NODE_PT_active_node_custom_properties,
     NODE_PT_gizmo_display,
     NODE_AST_compositor,
-
     node_panel(EEVEE_MATERIAL_PT_settings),
     node_panel(EEVEE_MATERIAL_PT_settings_surface),
     node_panel(EEVEE_MATERIAL_PT_settings_volume),
@@ -1273,5 +1274,6 @@ classes = (
 
 if __name__ == "__main__":  # only for live edit.
     from bpy.utils import register_class
+
     for cls in classes:
         register_class(cls)

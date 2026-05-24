@@ -1365,6 +1365,7 @@ static void hide_unselected_sockets(bNode *node,
       }
       break;
     }
+    case NodeTreeInterfaceItemType::Row:
     case NodeTreeInterfaceItemType::Panel: {
       /* Only visit unselected panels. */
       auto *interface_panel = reinterpret_cast<bNodeTreeInterfacePanel *>(item);
@@ -1433,6 +1434,7 @@ static bool contains_any_selected_input(const bNodeTreeInterfaceItem &item, bool
       return socket.flag & NODE_INTERFACE_SOCKET_INPUT &&
              (parent_selected || socket.flag & NODE_INTERFACE_SOCKET_SELECT);
     }
+    case NodeTreeInterfaceItemType::Row:
     case NodeTreeInterfaceItemType::Panel: {
       const auto &panel = reinterpret_cast<const bNodeTreeInterfacePanel &>(item);
       for (const auto *sub_item : panel.items()) {

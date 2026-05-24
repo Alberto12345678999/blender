@@ -216,6 +216,23 @@ class NodePanelViewItem : public BasicTreeViewItem {
       Layout &toggle_layout = row.row(true);
       /* Context is not used by the template function. */
       template_node_socket(&toggle_layout, /*C*/ nullptr, toggle_->socket_color());
+      this->add_label(row, IFACE_(label_.c_str()));
+      return;
+    }
+
+    if (const std::optional<node_interface::NodeInterfaceInlineSockets> inline_sockets =
+            node_interface::get_inline_sockets_if_valid(panel_, nodetree_.tree_interface))
+    {
+      Layout &input_socket_layout = row.row(true);
+      template_node_socket(&input_socket_layout, /*C*/ nullptr, inline_sockets->input->socket_color());
+
+      this->add_label(row, IFACE_(label_.c_str()));
+
+      Layout &output_socket_layout = row.row(true);
+      template_node_socket(&output_socket_layout,
+                           /*C*/ nullptr,
+                           inline_sockets->output->socket_color());
+      return;
     }
 
     this->add_label(row, IFACE_(label_.c_str()));
@@ -340,12 +357,18 @@ class NodeTreeInterfaceView : public AbstractTreeView {
           socket_item.uncollapse_by_default();
           break;
         }
+        case NodeTreeInterfaceItemType::Row:
         case NodeTreeInterfaceItemType::Panel: {
           bNodeTreeInterfacePanel *panel = node_interface::get_item_as<bNodeTreeInterfacePanel>(
               item);
           NodePanelViewItem &panel_item = parent_item.add_tree_item<NodePanelViewItem>(
               nodetree_, interface_, *panel);
           panel_item.uncollapse_by_default();
+          if (item->item_type == NodeTreeInterfaceItemType::Row &&
+              node_interface::get_inline_sockets_if_valid(*panel, nodetree_.tree_interface))
+          {
+            break;
+          }
           /* Skip over sockets which are a panel toggle. */
           const bNodeTreeInterfaceSocket *skip_item = panel->header_toggle_socket();
           add_items_for_panel_recursive(
@@ -408,6 +431,7 @@ void gather_drag_items_recursive(bNodeTreeInterfacePanel &panel,
 
     bool is_selected = false;
     switch (item->item_type) {
+      case NodeTreeInterfaceItemType::Row:
       case NodeTreeInterfaceItemType::Panel: {
         bNodeTreeInterfacePanel *panel = node_interface::get_item_as<bNodeTreeInterfacePanel>(
             item);
@@ -518,7 +542,9 @@ bool on_drop_interface_items(bContext *C,
   switch (drag_info.drop_location) {
     case DropLocation::Into: {
       /* Insert into target */
-      if (drop_target_item.item_type != NodeTreeInterfaceItemType::Panel) {
+      if (drop_target_item.item_type != NodeTreeInterfaceItemType::Row &&
+          drop_target_item.item_type != NodeTreeInterfaceItemType::Panel)
+      {
         return false;
       }
       parent = node_interface::get_item_as<bNodeTreeInterfacePanel>(&drop_target_item);

@@ -1079,6 +1079,7 @@ static bool tree_interface_item_can_set_prop(const bNodeTreeInterfaceItem &item,
       const auto &active_sock = reinterpret_cast<const bNodeTreeInterfaceSocket &>(active_item);
       return sock.socket_typeinfo()->type == active_sock.socket_typeinfo()->type;
     }
+    case NodeTreeInterfaceItemType::Row:
     case NodeTreeInterfaceItemType::Panel: {
       const auto &panel = reinterpret_cast<const bNodeTreeInterfacePanel &>(item);
       return panel.flag & NODE_INTERFACE_PANEL_SELECT;

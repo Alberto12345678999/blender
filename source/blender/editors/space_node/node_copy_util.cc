@@ -673,6 +673,7 @@ NodeTreeInterfaceMapping map_group_node_interface(const NodeSetInterfaceParams &
   NodeTreeInterfaceMapping result;
   for (const bNodeTreeInterfaceItem *io_item : group_tree.interface_items()) {
     switch (io_item->item_type) {
+      case NodeTreeInterfaceItemType::Row:
       case NodeTreeInterfaceItemType::Panel: {
         const auto *io_panel = reinterpret_cast<const bNodeTreeInterfacePanel *>(io_item);
         map_panel(result, params, group_node, *io_panel);

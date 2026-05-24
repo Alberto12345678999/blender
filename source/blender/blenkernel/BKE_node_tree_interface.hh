@@ -13,6 +13,7 @@
 
 #include "BKE_node.hh"
 
+#include <optional>
 #include <type_traits>
 
 #include "BLI_cache_mutex.hh"
@@ -55,6 +56,11 @@ class bNodeTreeInterfaceRuntime {
 
 namespace node_interface {
 
+struct NodeInterfaceInlineSockets {
+  const bNodeTreeInterfaceSocket *input = nullptr;
+  const bNodeTreeInterfaceSocket *output = nullptr;
+};
+
 namespace detail {
 
 template<typename T> static bool item_is_type(const bNodeTreeInterfaceItem &item)
@@ -65,6 +71,7 @@ template<typename T> static bool item_is_type(const bNodeTreeInterfaceItem &item
       match |= std::is_same_v<T, bNodeTreeInterfaceSocket>;
       break;
     }
+    case NodeTreeInterfaceItemType::Row:
     case NodeTreeInterfaceItemType::Panel: {
       match |= std::is_same_v<T, bNodeTreeInterfacePanel>;
       break;
@@ -102,6 +109,9 @@ template<typename T> const T *get_item_as(const bNodeTreeInterfaceItem *item)
   }
   return nullptr;
 }
+
+std::optional<NodeInterfaceInlineSockets> get_inline_sockets_if_valid(
+    const bNodeTreeInterfacePanel &panel, const bNodeTreeInterface &tree_interface);
 
 namespace socket_types {
 
