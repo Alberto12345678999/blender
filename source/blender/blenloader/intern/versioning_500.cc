@@ -4505,7 +4505,7 @@ void blo_do_versions_500(FileData *fd, Library * /*lib*/, Main *bmain)
     }
     FOREACH_NODETREE_END;
   }
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 8)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 9)) {
     FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
       bke::node_tree_set_type(*ntree);
       for (bNode &node : ntree->nodes) {

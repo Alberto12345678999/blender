@@ -311,6 +311,60 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       }
     }
   }
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 15)) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      bke::node_tree_set_type(*ntree);
+      for (bNode &node : ntree->nodes) {
+        if (node.type_legacy == NODE_GROUP) {
+          continue; /* Unsafe while group->id might be null. */
+        }
+        if (ELEM(node.type_legacy,
+                 SH_NODE_MATH,
+                 SH_NODE_COMBINE_COLOR,
+                 SH_NODE_SEPARATE_COLOR,
+                 SH_NODE_MIX))
+        {
+          bke::node_declaration_ensure(*ntree, node);
+        }
+      }
+      for (bNode &node : ntree->nodes) {
+        if (node.type_legacy == SH_NODE_MATH && node.storage == nullptr) {
+          NodeShaderMath *storage = MEM_new<NodeShaderMath>(__func__);
+          storage->operation = node.custom1;
+          storage->use_clamp = (node.custom2 & SHD_MATH_CLAMP) ? 1 : 0;
+          node.storage = storage;
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 14)) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      bke::node_tree_set_type(*ntree);
+      for (bNode &node : ntree->nodes) {
+        if (node.type_legacy == NODE_GROUP) {
+          continue; /* Unsafe while group->id might be null. */
+        }
+        if (ELEM(node.type_legacy,
+                 SH_NODE_MATH,
+                 SH_NODE_COMBINE_COLOR,
+                 SH_NODE_SEPARATE_COLOR,
+                 SH_NODE_MIX))
+        {
+          bke::node_declaration_ensure(*ntree, node);
+        }
+      }
+      for (bNode &node : ntree->nodes) {
+        if (node.type_legacy == SH_NODE_MATH && node.storage == nullptr) {
+          NodeShaderMath *storage = MEM_new<NodeShaderMath>(__func__);
+          storage->operation = node.custom1;
+          storage->use_clamp = (node.custom2 & SHD_MATH_CLAMP) ? 1 : 0;
+          node.storage = storage;
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
